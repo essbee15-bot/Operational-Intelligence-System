@@ -142,6 +142,20 @@ export default async function PlatformAdminPage({
           <p style={{ margin: 0, fontWeight: 600, color: '#111827', fontSize: '0.9375rem' }}>Audit Log</p>
           <p style={{ margin: '0.25rem 0 0 0', color: '#6b7280', fontSize: '0.8125rem' }}>Full change history across all organisations and platform actions.</p>
         </a>
+        <a
+          href="/platform-admin/meetings"
+          style={{ display: 'block', backgroundColor: 'white', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '1rem 1.25rem', textDecoration: 'none' }}
+        >
+          <p style={{ margin: 0, fontWeight: 600, color: '#111827', fontSize: '0.9375rem' }}>Meetings Overview</p>
+          <p style={{ margin: '0.25rem 0 0 0', color: '#6b7280', fontSize: '0.8125rem' }}>View all meetings across every organisation for consistency oversight.</p>
+        </a>
+        <a
+          href="/platform-admin/options"
+          style={{ display: 'block', backgroundColor: 'white', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '1rem 1.25rem', textDecoration: 'none' }}
+        >
+          <p style={{ margin: 0, fontWeight: 600, color: '#111827', fontSize: '0.9375rem' }}>System Options</p>
+          <p style={{ margin: '0.25rem 0 0 0', color: '#6b7280', fontSize: '0.8125rem' }}>Manage the system-wide default dropdown options available to all organisations.</p>
+        </a>
       </div>
 
       {/* Organisations Overview */}

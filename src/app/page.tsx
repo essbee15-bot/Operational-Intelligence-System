@@ -32,6 +32,16 @@ export default async function HomePage({
       description: 'Create and manage client organisations and their admin accounts.',
     })
     navItems.push({
+      label: 'Meetings Overview',
+      href: '/platform-admin/meetings',
+      description: 'View all meetings across every organisation for consistency oversight.',
+    })
+    navItems.push({
+      label: 'System Options',
+      href: '/platform-admin/options',
+      description: 'Manage system-wide default dropdown options available to all organisations.',
+    })
+    navItems.push({
       label: 'View All Users',
       href: '/platform-admin/users',
       description: 'Browse, edit and remove users across all organisations.',

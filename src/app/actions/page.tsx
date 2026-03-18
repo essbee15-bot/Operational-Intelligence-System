@@ -15,10 +15,13 @@ export default async function MyActionsPage({
 
   const { data: profile } = await supabase
     .from('users')
-    .select('id, organization_id')
+    .select('id, organization_id, is_platform_admin')
     .eq('id', user.id)
     .single()
   if (!profile) redirect('/login')
+
+  // Platform admins have no organisation — redirect to meetings overview
+  if (profile.is_platform_admin) redirect('/platform-admin/meetings')
 
   const adminClient = createAdminClient()
 
