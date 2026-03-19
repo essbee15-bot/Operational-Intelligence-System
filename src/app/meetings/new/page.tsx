@@ -18,6 +18,11 @@ const MEETING_TYPES = [
     label: 'Project Meeting',
     description: 'A project-focused meeting with milestones, actions and progress tracking.',
   },
+  {
+    key: 'performance_review',
+    label: 'Performance Review',
+    description: 'Formal periodic review — strengths, development areas, goals for next period, and overall rating.',
+  },
 ]
 
 export default async function NewMeetingPage({
@@ -164,6 +169,92 @@ export default async function NewMeetingPage({
                 style={{ padding: '0.625rem 1.25rem', backgroundColor: '#111827', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.875rem' }}
               >
                 Create Meeting
+              </button>
+              <a
+                href="/meetings/new"
+                style={{ padding: '0.625rem 1rem', border: '1px solid #d1d5db', borderRadius: '4px', fontSize: '0.875rem', color: '#374151', textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}
+              >
+                ← Change type
+              </a>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* Performance Review form */}
+      {activeType === 'performance_review' && (
+        <div style={{ backgroundColor: 'white', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '1.5rem' }}>
+          <h2 style={{ margin: '0 0 1.25rem 0', fontSize: '1.0625rem', fontWeight: 600 }}>Performance Review Details</h2>
+          <form style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            <input type="hidden" name="meeting_type" value="performance_review" />
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem' }}>
+                <label htmlFor="date" style={{ fontSize: '0.875rem', fontWeight: 500 }}>Date</label>
+                <input
+                  id="date" name="date" type="date" required
+                  defaultValue={today}
+                  style={{ padding: '0.5rem', border: '1px solid #d1d5db', borderRadius: '4px', fontSize: '0.875rem' }}
+                />
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem' }}>
+                <label htmlFor="time" style={{ fontSize: '0.875rem', fontWeight: 500 }}>Time</label>
+                <input
+                  id="time" name="time" type="time" defaultValue="09:00"
+                  style={{ padding: '0.5rem', border: '1px solid #d1d5db', borderRadius: '4px', fontSize: '0.875rem' }}
+                />
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem' }}>
+              <label htmlFor="attendee_id" style={{ fontSize: '0.875rem', fontWeight: 500 }}>Employee being reviewed</label>
+              <select
+                id="attendee_id" name="attendee_id" required
+                style={{ padding: '0.5rem', border: '1px solid #d1d5db', borderRadius: '4px', fontSize: '0.875rem', backgroundColor: 'white' }}
+              >
+                <option value="">Select employee…</option>
+                {(orgUsers ?? []).map(u => (
+                  <option key={u.id} value={u.id}>{u.full_name ?? u.email}</option>
+                ))}
+              </select>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem' }}>
+              <label htmlFor="review_period" style={{ fontSize: '0.875rem', fontWeight: 500 }}>
+                Review period <span style={{ color: '#9ca3af', fontWeight: 400 }}>(optional)</span>
+              </label>
+              <input
+                id="review_period" name="review_period" type="text" maxLength={100}
+                placeholder="e.g. Q1 2026, Annual 2025"
+                style={{ padding: '0.5rem', border: '1px solid #d1d5db', borderRadius: '4px', fontSize: '0.875rem' }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem' }}>
+              <label htmlFor="previous_meeting_id" style={{ fontSize: '0.875rem', fontWeight: 500 }}>
+                Previous review <span style={{ color: '#9ca3af', fontWeight: 400 }}>(optional — carries forward open actions)</span>
+              </label>
+              <select
+                id="previous_meeting_id" name="previous_meeting_id"
+                style={{ padding: '0.5rem', border: '1px solid #d1d5db', borderRadius: '4px', fontSize: '0.875rem', backgroundColor: 'white' }}
+              >
+                <option value="">None (first review)</option>
+                {(previousMeetings ?? [])
+                  .filter(m => m.meeting_type === 'performance_review')
+                  .map(m => (
+                    <option key={m.id} value={m.id}>
+                      {m.title} — {new Date(m.date).toLocaleDateString('en-GB')}
+                    </option>
+                  ))}
+              </select>
+            </div>
+
+            <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.25rem' }}>
+              <button
+                formAction={createMeeting}
+                style={{ padding: '0.625rem 1.25rem', backgroundColor: '#111827', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.875rem' }}
+              >
+                Create Review
               </button>
               <a
                 href="/meetings/new"

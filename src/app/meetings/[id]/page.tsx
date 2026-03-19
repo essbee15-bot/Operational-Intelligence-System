@@ -6,12 +6,21 @@ import {
   addAction, removeAction, reviewAction,
   addAgendaItem, removeAgendaItem,
   addMilestone, updateMilestoneStatus, removeMilestone,
+  saveReviewOverview, saveCustomFieldValue,
 } from './actions'
 
 const TYPE_LABELS: Record<string, string> = {
-  one_on_one: '1:1 Meeting',
-  team_meeting: 'Team Meeting',
-  project_meeting: 'Project Meeting',
+  one_on_one:         '1:1 Meeting',
+  team_meeting:       'Team Meeting',
+  project_meeting:    'Project Meeting',
+  performance_review: 'Performance Review',
+}
+
+const RATING_LABELS: Record<string, string> = {
+  exceeds:               'Exceeds Expectations',
+  meets:                 'Meets Expectations',
+  development_required:  'Development Required',
+  unsatisfactory:        'Unsatisfactory',
 }
 
 const OUTCOME_COLOURS: Record<string, { bg: string; color: string }> = {
@@ -171,6 +180,26 @@ export default async function MeetingDetailPage({
     .eq('meeting_id', id)
     .single()
 
+  // Load custom field definitions for meetings (org-specific)
+  const { data: fieldDefs } = await adminClient
+    .from('field_definitions')
+    .select('*')
+    .eq('organization_id', profile.organization_id)
+    .eq('entity_type', 'meeting')
+    .order('display_order')
+
+  // Load custom field values for this meeting
+  const { data: fieldVals } = await adminClient
+    .from('field_values')
+    .select('field_key, value')
+    .eq('organization_id', profile.organization_id)
+    .eq('entity_type', 'meeting')
+    .eq('entity_id', id)
+
+  const fieldValMap: Record<string, string> = Object.fromEntries(
+    (fieldVals ?? []).map(v => [v.field_key as string, (v.value ?? '') as string])
+  )
+
   // Load predefined options for this org (merge system defaults + org overrides)
   const { data: allOptions } = await adminClient
     .from('predefined_options')
@@ -201,7 +230,7 @@ export default async function MeetingDetailPage({
 
   // Participant display
   let participantsLine = ''
-  if (meeting.meeting_type === 'one_on_one') {
+  if (meeting.meeting_type === 'one_on_one' || meeting.meeting_type === 'performance_review') {
     participantsLine = `${userMap[meeting.organizer_id] ?? 'Unknown'} & ${meeting.attendee_id ? userMap[meeting.attendee_id] ?? 'Unknown' : 'Unknown'}`
   } else {
     const names = (attendees ?? []).map(a => userMap[a.user_id]).filter(Boolean)
@@ -229,6 +258,8 @@ export default async function MeetingDetailPage({
           <h1 style={{ margin: 0, fontSize: '1.5rem' }}>
             {meeting.meeting_type === 'one_on_one'
               ? `1:1 — ${meeting.attendee_id ? userMap[meeting.attendee_id] ?? 'Unknown' : 'Unknown'}`
+              : meeting.meeting_type === 'performance_review'
+              ? `Review — ${meeting.attendee_id ? userMap[meeting.attendee_id] ?? 'Unknown' : 'Unknown'}`
               : meeting.purpose ?? meeting.title}
           </h1>
           <span style={{ padding: '0.125rem 0.625rem', borderRadius: '9999px', fontSize: '0.75rem', backgroundColor: '#f3f4f6', color: '#374151' }}>
@@ -400,6 +431,110 @@ export default async function MeetingDetailPage({
         </div>
       )}
 
+      {/* ── Performance Review section ───────────────────────────────── */}
+      {meeting.meeting_type === 'performance_review' && (
+        <>
+          {/* Review overview: period + overall rating */}
+          <div style={sectionStyle}>
+            <h2 style={h2Style}>Performance Review</h2>
+            <form style={{ display: 'flex', flexDirection: 'column', gap: '0.875rem' }}>
+              <input type="hidden" name="meeting_id" value={id} />
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', alignItems: 'flex-end' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem' }}>
+                  <label style={labelStyle}>Review period</label>
+                  <input
+                    name="review_period"
+                    type="text"
+                    maxLength={100}
+                    defaultValue={meeting.review_period ?? ''}
+                    placeholder="e.g. Q1 2026, Annual 2025"
+                    style={inputStyle}
+                  />
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem' }}>
+                  <label style={labelStyle}>Overall rating</label>
+                  <select name="overall_rating" defaultValue={meeting.overall_rating ?? ''} style={selectStyle}>
+                    <option value="">— Not yet rated —</option>
+                    {Object.entries(RATING_LABELS).map(([val, label]) => (
+                      <option key={val} value={val}>{label}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <button formAction={saveReviewOverview} style={{ ...btnPrimary, alignSelf: 'flex-start' }}>Save Overview</button>
+            </form>
+          </div>
+
+          {/* Performance this period */}
+          <div style={sectionStyle}>
+            <h2 style={h2Style}>Performance this Period</h2>
+            <form style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+              <input type="hidden" name="meeting_id" value={id} />
+              <textarea
+                name="performance_reasons"
+                defaultValue={meeting.performance_reasons ?? ''}
+                maxLength={2000}
+                rows={4}
+                placeholder="How has the employee performed against their objectives and responsibilities this period?…"
+                style={textareaStyle}
+              />
+              <button formAction={saveMeetingNotes} style={{ ...btnPrimary, alignSelf: 'flex-start' }}>Save</button>
+            </form>
+          </div>
+
+          {/* Strengths & achievements */}
+          <div style={sectionStyle}>
+            <h2 style={h2Style}>Strengths &amp; Achievements</h2>
+            <form style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+              <input type="hidden" name="meeting_id" value={id} />
+              <textarea
+                name="success_failure_surprises"
+                defaultValue={meeting.success_failure_surprises ?? ''}
+                maxLength={2000}
+                rows={4}
+                placeholder="Key strengths demonstrated and achievements this period…"
+                style={textareaStyle}
+              />
+              <button formAction={saveMeetingNotes} style={{ ...btnPrimary, alignSelf: 'flex-start' }}>Save</button>
+            </form>
+          </div>
+
+          {/* Development areas */}
+          <div style={sectionStyle}>
+            <h2 style={h2Style}>Development Areas</h2>
+            <form style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+              <input type="hidden" name="meeting_id" value={id} />
+              <textarea
+                name="development_requests"
+                defaultValue={meeting.development_requests ?? ''}
+                maxLength={2000}
+                rows={4}
+                placeholder="Areas for growth, skills gaps, and development actions agreed…"
+                style={textareaStyle}
+              />
+              <button formAction={saveMeetingNotes} style={{ ...btnPrimary, alignSelf: 'flex-start' }}>Save</button>
+            </form>
+          </div>
+
+          {/* Goals for next period */}
+          <div style={sectionStyle}>
+            <h2 style={h2Style}>Goals for Next Period</h2>
+            <form style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+              <input type="hidden" name="meeting_id" value={id} />
+              <textarea
+                name="goals_next_period"
+                defaultValue={meeting.goals_next_period ?? ''}
+                maxLength={2000}
+                rows={4}
+                placeholder="Objectives and goals agreed for the next review period…"
+                style={textareaStyle}
+              />
+              <button formAction={saveMeetingNotes} style={{ ...btnPrimary, alignSelf: 'flex-start' }}>Save</button>
+            </form>
+          </div>
+        </>
+      )}
+
       {/* ── Discussion notes ─────────────────────────────────────────── */}
       <div style={sectionStyle}>
         <h2 style={h2Style}>Discussion Notes</h2>
@@ -527,6 +662,58 @@ export default async function MeetingDetailPage({
             </div>
             <button formAction={addMilestone} style={{ ...btnPrimary, whiteSpace: 'nowrap' }}>Add Milestone</button>
           </form>
+        </div>
+      )}
+
+      {/* ── Custom org fields (shown for all meeting types if defined) ── */}
+      {(fieldDefs ?? []).length > 0 && (
+        <div style={sectionStyle}>
+          <h2 style={h2Style}>Custom Fields</h2>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+            {(fieldDefs ?? []).map((fd: any) => {
+              const currentVal = fieldValMap[fd.field_key as string] ?? ''
+              const fieldType = fd.field_type as string
+              const opts: string[] = Array.isArray(fd.options) ? fd.options as string[] : []
+
+              return (
+                <form key={fd.id as string} style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem' }}>
+                  <input type="hidden" name="meeting_id" value={id} />
+                  <input type="hidden" name="field_key" value={fd.field_key as string} />
+
+                  <label style={labelStyle}>{fd.label as string}</label>
+
+                  {fieldType === 'textarea' ? (
+                    <textarea
+                      name="value"
+                      defaultValue={currentVal}
+                      maxLength={2000}
+                      rows={3}
+                      style={textareaStyle}
+                    />
+                  ) : fieldType === 'select' ? (
+                    <select name="value" defaultValue={currentVal} style={selectStyle}>
+                      <option value="">— Select —</option>
+                      {opts.map(o => <option key={o} value={o}>{o}</option>)}
+                    </select>
+                  ) : fieldType === 'number' ? (
+                    <input name="value" type="number" defaultValue={currentVal} style={inputStyle} />
+                  ) : fieldType === 'date' ? (
+                    <input name="value" type="date" defaultValue={currentVal} style={inputStyle} />
+                  ) : fieldType === 'checkbox' ? (
+                    <select name="value" defaultValue={currentVal || 'false'} style={selectStyle}>
+                      <option value="true">Yes</option>
+                      <option value="false">No</option>
+                    </select>
+                  ) : (
+                    <input name="value" type="text" defaultValue={currentVal} maxLength={500} style={inputStyle} />
+                  )}
+
+                  <button formAction={saveCustomFieldValue} style={{ ...btnPrimary, alignSelf: 'flex-start', marginTop: '0.125rem' }}>Save</button>
+                </form>
+              )
+            })}
+          </div>
         </div>
       )}
 

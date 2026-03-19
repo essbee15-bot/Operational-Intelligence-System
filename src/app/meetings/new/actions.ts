@@ -22,7 +22,7 @@ export async function createMeeting(formData: FormData) {
   const timeStr = (formData.get('time') as string) ?? '09:00'
   const previousMeetingId = (formData.get('previous_meeting_id') as string) || null
 
-  const validTypes = ['one_on_one', 'team_meeting', 'project_meeting']
+  const validTypes = ['one_on_one', 'team_meeting', 'project_meeting', 'performance_review']
   if (!validTypes.includes(meetingType)) {
     redirect('/meetings/new?message=Invalid meeting type')
   }
@@ -70,6 +70,46 @@ export async function createMeeting(formData: FormData) {
     }
 
     redirect(`/meetings/${meeting.id}?message=Meeting created`)
+
+  } else if (meetingType === 'performance_review') {
+    const attendeeId = formData.get('attendee_id') as string
+    if (!attendeeId) {
+      redirect('/meetings/new?type=performance_review&message=Please select an employee')
+    }
+
+    const reviewPeriod = (formData.get('review_period') as string)?.trim() || null
+
+    // Auto-generate title
+    const { data: attendee } = await adminClient
+      .from('users')
+      .select('full_name, email')
+      .eq('id', attendeeId)
+      .single()
+
+    const attendeeName = attendee?.full_name ?? attendee?.email ?? 'Employee'
+    const datePart = new Date(dateStr).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+    const title = `Review — ${attendeeName} — ${reviewPeriod ?? datePart}`
+
+    const { data: meeting, error } = await adminClient
+      .from('meetings')
+      .insert({
+        organization_id: profile.organization_id,
+        meeting_type: 'performance_review',
+        title,
+        organizer_id: user.id,
+        attendee_id: attendeeId,
+        date: dateTime.toISOString(),
+        previous_meeting_id: previousMeetingId,
+        review_period: reviewPeriod,
+      })
+      .select('id')
+      .single()
+
+    if (error || !meeting) {
+      redirect(`/meetings/new?type=performance_review&message=Failed to create review: ${error?.message ?? 'unknown error'}`)
+    }
+
+    redirect(`/meetings/${meeting.id}?message=Review created`)
 
   } else {
     // team_meeting or project_meeting

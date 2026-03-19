@@ -38,7 +38,8 @@ export async function saveMeetingNotes(formData: FormData) {
   const fields = [
     'general_notes', 'outcomes', 'aob_notes', 'kpi_notes',
     'development_requests', 'project_involvement_notes', 'tests_experiments_notes',
-    'purpose',
+    'purpose', 'goals_next_period',
+    'performance_reasons', 'success_failure_surprises',
   ]
   for (const f of fields) {
     const val = formData.get(f) as string | null
@@ -290,4 +291,75 @@ export async function removeMilestone(formData: FormData) {
     .eq('organization_id', profile.organization_id)
 
   redirect(`/meetings/${meetingId}?message=Milestone removed`)
+}
+
+// ─── Performance review overview (review_period + overall_rating) ─────────────
+
+const VALID_RATINGS = ['exceeds', 'meets', 'development_required', 'unsatisfactory']
+
+export async function saveReviewOverview(formData: FormData) {
+  const meetingId = formData.get('meeting_id') as string
+  const { adminClient } = await verifyMeetingAccess(meetingId)
+
+  const reviewPeriod = (formData.get('review_period') as string)?.trim() || null
+  const overallRating = (formData.get('overall_rating') as string) || null
+
+  if (overallRating && !VALID_RATINGS.includes(overallRating)) {
+    redirect(`/meetings/${meetingId}?message=Invalid rating value`)
+  }
+
+  const { error } = await adminClient
+    .from('meetings')
+    .update({ review_period: reviewPeriod, overall_rating: overallRating })
+    .eq('id', meetingId)
+
+  if (error) {
+    redirect(`/meetings/${meetingId}?message=Failed to save review overview: ${error.message}`)
+  }
+  redirect(`/meetings/${meetingId}?message=Review overview saved`)
+}
+
+// ─── Custom field values (for /admin/fields field_definitions) ────────────────
+
+export async function saveCustomFieldValue(formData: FormData) {
+  const meetingId = formData.get('meeting_id') as string
+  const { adminClient, profile } = await verifyMeetingAccess(meetingId)
+
+  const fieldKey = (formData.get('field_key') as string)?.trim()
+  const value = (formData.get('value') as string) ?? ''
+
+  if (!fieldKey) {
+    redirect(`/meetings/${meetingId}?message=Field key is required`)
+  }
+
+  // Confirm the field definition exists for this org + entity_type='meeting'
+  const { data: fieldDef } = await adminClient
+    .from('field_definitions')
+    .select('id')
+    .eq('organization_id', profile.organization_id)
+    .eq('entity_type', 'meeting')
+    .eq('field_key', fieldKey)
+    .single()
+
+  if (!fieldDef) {
+    redirect(`/meetings/${meetingId}?message=Custom field not found`)
+  }
+
+  const { error } = await adminClient
+    .from('field_values')
+    .upsert(
+      {
+        organization_id: profile.organization_id,
+        entity_type: 'meeting',
+        entity_id: meetingId,
+        field_key: fieldKey,
+        value: value || null,
+      },
+      { onConflict: 'organization_id,entity_type,entity_id,field_key' }
+    )
+
+  if (error) {
+    redirect(`/meetings/${meetingId}?message=Failed to save custom field: ${error.message}`)
+  }
+  redirect(`/meetings/${meetingId}?message=Field saved`)
 }

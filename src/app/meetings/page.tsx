@@ -2,15 +2,17 @@ import { createClient } from '@/utils/supabase/server'
 import { redirect } from 'next/navigation'
 
 const TYPE_LABELS: Record<string, string> = {
-  one_on_one:      '1:1',
-  team_meeting:    'Team',
-  project_meeting: 'Project',
+  one_on_one:         '1:1',
+  team_meeting:       'Team',
+  project_meeting:    'Project',
+  performance_review: 'Review',
 }
 
 const TYPE_COLOURS: Record<string, { bg: string; color: string }> = {
-  one_on_one:      { bg: '#eff6ff', color: '#1d4ed8' },
-  team_meeting:    { bg: '#f0fdf4', color: '#166534' },
-  project_meeting: { bg: '#faf5ff', color: '#6b21a8' },
+  one_on_one:         { bg: '#eff6ff', color: '#1d4ed8' },
+  team_meeting:       { bg: '#f0fdf4', color: '#166534' },
+  project_meeting:    { bg: '#faf5ff', color: '#6b21a8' },
+  performance_review: { bg: '#fdf4ff', color: '#7e22ce' },
 }
 
 export default async function MeetingsPage({
@@ -82,6 +84,7 @@ export default async function MeetingsPage({
     { key: 'one_on_one', label: '1:1s' },
     { key: 'team_meeting', label: 'Team' },
     { key: 'project_meeting', label: 'Project' },
+    { key: 'performance_review', label: 'Reviews' },
   ]
 
   return (
@@ -159,6 +162,8 @@ export default async function MeetingsPage({
                 const colours = TYPE_COLOURS[m.meeting_type] ?? { bg: '#f3f4f6', color: '#374151' }
                 const displayTitle = m.meeting_type === 'one_on_one'
                   ? `1:1 — ${m.attendee_id ? userMap[m.attendee_id] ?? 'Unknown' : 'Unknown'}`
+                  : m.meeting_type === 'performance_review'
+                  ? `Review — ${m.attendee_id ? userMap[m.attendee_id] ?? 'Unknown' : 'Unknown'}`
                   : m.purpose ?? m.title
                 const organiserName = userMap[m.organizer_id] ?? 'Unknown'
 
@@ -176,7 +181,7 @@ export default async function MeetingsPage({
                       </span>
                     </td>
                     <td style={{ padding: '0.75rem 1rem', color: '#6b7280', fontSize: '0.8125rem' }}>
-                      {m.meeting_type === 'one_on_one'
+                      {(m.meeting_type === 'one_on_one' || m.meeting_type === 'performance_review')
                         ? `${userMap[m.organizer_id] ?? '?'} & ${m.attendee_id ? userMap[m.attendee_id] ?? '?' : '?'}`
                         : `Organised by ${organiserName}`
                       }
