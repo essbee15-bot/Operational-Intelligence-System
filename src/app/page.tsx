@@ -154,6 +154,7 @@ export default async function HomePage({
     navItems.push({ label: 'View All Users', href: '/platform-admin/users', description: 'Browse, edit and remove users across all organisations.' })
     navItems.push({ label: 'Platform Team', href: '/platform-admin/team', description: 'Manage platform administrators who maintain the system.' })
     navItems.push({ label: 'Audit Log', href: '/platform-admin/audit', description: 'Full change history across all organisations and platform actions.' })
+    navItems.push({ label: 'Org Dashboard Preview', href: '/platform-admin/preview', description: 'Preview the dashboard as any org — switch role view to see what each level can and can\'t see.' })
   }
 
   if (isAdmin && !isPlatformAdmin) {
