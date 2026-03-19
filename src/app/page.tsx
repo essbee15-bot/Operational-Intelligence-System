@@ -42,6 +42,11 @@ export default async function HomePage({
       description: 'Manage system-wide default dropdown options available to all organisations.',
     })
     navItems.push({
+      label: 'KPI Catalogue',
+      href: '/platform-admin/kpis',
+      description: 'Manage the system KPI library and pre-load KPIs for organisations at onboarding.',
+    })
+    navItems.push({
       label: 'View All Users',
       href: '/platform-admin/users',
       description: 'Browse, edit and remove users across all organisations.',
