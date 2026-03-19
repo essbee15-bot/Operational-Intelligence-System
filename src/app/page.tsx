@@ -112,6 +112,11 @@ export default async function HomePage({
       href: '/kpis',
       description: 'View your organisation\'s KPIs and track performance over time.',
     })
+    navItems.push({
+      label: 'Goals & OKRs',
+      href: '/goals',
+      description: 'Track objectives and key results aligned to your organisation\'s KPIs.',
+    })
   }
 
   navItems.push({
