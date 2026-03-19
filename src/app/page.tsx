@@ -351,6 +351,7 @@ export default async function HomePage({
     navItems.push({ label: 'Teams', href: '/admin/teams', description: 'Create teams, assign members and scope KPIs to specific teams.' })
     navItems.push({ label: 'Pulse Surveys', href: '/admin/surveys', description: 'Create anonymous team pulse surveys and view aggregated results. Individual responses are never linked to anyone.' })
     navItems.push({ label: 'Billing', href: '/billing', description: 'Manage your subscription plan, view usage, and update payment details.' })
+    navItems.push({ label: 'AI Assistant', href: '/admin/ai', description: 'Configure the AI co-pilot — connect your own API key and let your team query organisational memory.' })
   }
 
   if (!isPlatformAdmin) {
