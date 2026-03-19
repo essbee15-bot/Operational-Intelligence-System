@@ -1,4 +1,5 @@
 import { createClient } from '@/utils/supabase/server'
+import { createAdminClient } from '@/utils/supabase/admin'
 import { signout } from '@/app/login/actions'
 import { redirect } from 'next/navigation'
 
@@ -15,115 +16,163 @@ export default async function HomePage({
 
   const { data: profile } = await supabase
     .from('users')
-    .select('full_name, role, is_platform_admin, organization_id')
+    .select('id, full_name, role, is_platform_admin, organization_id')
     .eq('id', user.id)
     .single()
 
   const isPlatformAdmin = profile?.is_platform_admin ?? false
   const role = profile?.role ?? 'contributor'
+  const isAdmin   = role === 'admin'
+  const isManager = isAdmin || role === 'manager'
   const name = profile?.full_name ?? user.email
 
+  // ── Widget data (org users only) ─────────────────────────────────────────
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let openActions: any[] = []
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let snapshotKpis: any[] = []
+  let recordsByKpi: Record<string, { value: number; date: string }[]> = {}
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let activeObjectives: any[] = []
+  let progressMap: Record<string, { total: number; complete: number }> = {}
+  let teamMap: Record<string, string> = {}
+
+  if (!isPlatformAdmin && profile?.organization_id) {
+    const adminClient = createAdminClient()
+
+    // 1. My open actions (up to 5, soonest due first)
+    const { data: actionsRaw } = await adminClient
+      .from('action_items')
+      .select('id, action_text, title, due_date, meeting_id, meetings(id, title, purpose, meeting_type)')
+      .eq('organization_id', profile.organization_id)
+      .eq('assignee_id', user.id)
+      .eq('is_closed', false)
+      .order('due_date', { ascending: true, nullsFirst: false })
+      .limit(5)
+
+    openActions = actionsRaw ?? []
+
+    // 2. Visible KPIs (audience + team filtered)
+    const { data: kpisRaw } = await adminClient
+      .from('kpis')
+      .select('id, name, unit, category, target_value, audience, team_id')
+      .eq('organization_id', profile.organization_id)
+      .eq('is_active', true)
+      .order('category')
+      .order('display_order')
+
+    const { data: myMemberships } = await adminClient
+      .from('team_members')
+      .select('team_id')
+      .eq('user_id', user.id)
+
+    const myTeamIds = new Set((myMemberships ?? []).map(m => m.team_id as string))
+
+    const allVisible = isManager
+      ? (kpisRaw ?? [])
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      : (kpisRaw ?? []).filter((k: any) =>
+          k.audience !== 'management_only' &&
+          (k.team_id == null || myTeamIds.has(k.team_id as string))
+        )
+
+    snapshotKpis = allVisible.slice(0, 6)
+
+    // 3. Latest KPI records (batch, up to 2 per KPI, grouped client-side)
+    if (snapshotKpis.length > 0) {
+      const { data: recentRecords } = await adminClient
+        .from('kpi_records')
+        .select('kpi_id, value, date')
+        .eq('organization_id', profile.organization_id)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        .in('kpi_id', snapshotKpis.map((k: any) => k.id as string))
+        .order('date', { ascending: false })
+        .limit(snapshotKpis.length * 2 + 10)
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ;(recentRecords ?? []).forEach((r: any) => {
+        const kid = r.kpi_id as string
+        if (!recordsByKpi[kid]) recordsByKpi[kid] = []
+        if (recordsByKpi[kid]!.length < 2) {
+          recordsByKpi[kid]!.push({ value: r.value as number, date: r.date as string })
+        }
+      })
+    }
+
+    // 4. Active objectives (up to 4, soonest end_date first)
+    const { data: objRaw } = await adminClient
+      .from('objectives')
+      .select('id, title, team_id, end_date, status')
+      .eq('organization_id', profile.organization_id)
+      .eq('status', 'active')
+      .order('end_date', { ascending: true, nullsFirst: false })
+      .limit(4)
+
+    activeObjectives = objRaw ?? []
+
+    // 5. KR counts for those objectives
+    if (activeObjectives.length > 0) {
+      const { data: krs } = await adminClient
+        .from('key_results')
+        .select('objective_id, status')
+        .eq('organization_id', profile.organization_id)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        .in('objective_id', activeObjectives.map((o: any) => o.id as string))
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ;(krs ?? []).forEach((kr: any) => {
+        const oid = kr.objective_id as string
+        if (!progressMap[oid]) progressMap[oid] = { total: 0, complete: 0 }
+        progressMap[oid]!.total++
+        if (kr.status === 'complete') progressMap[oid]!.complete++
+      })
+    }
+
+    // 6. Teams (for objective team badges)
+    const { data: teamsRaw } = await adminClient
+      .from('teams')
+      .select('id, name')
+      .eq('organization_id', profile.organization_id)
+
+    teamMap = Object.fromEntries(
+      (teamsRaw ?? []).map(t => [t.id as string, t.name as string])
+    )
+  }
+
+  const now = new Date()
+  const isOverdue = (dueDateStr: string | null) =>
+    dueDateStr != null && new Date(dueDateStr) < now
+
+  // ── Nav items (role-filtered) ─────────────────────────────────────────────
   const navItems: { label: string; href: string; description: string }[] = []
 
   if (isPlatformAdmin) {
-    navItems.push({
-      label: 'Platform Administration',
-      href: '/platform-admin',
-      description: 'Create and manage client organisations and their admin accounts.',
-    })
-    navItems.push({
-      label: 'Meetings Overview',
-      href: '/platform-admin/meetings',
-      description: 'View all meetings across every organisation for consistency oversight.',
-    })
-    navItems.push({
-      label: 'System Options',
-      href: '/platform-admin/options',
-      description: 'Manage system-wide default dropdown options available to all organisations.',
-    })
-    navItems.push({
-      label: 'KPI Catalogue',
-      href: '/platform-admin/kpis',
-      description: 'Manage the system KPI library and pre-load KPIs for organisations at onboarding.',
-    })
-    navItems.push({
-      label: 'View All Users',
-      href: '/platform-admin/users',
-      description: 'Browse, edit and remove users across all organisations.',
-    })
-    navItems.push({
-      label: 'Platform Team',
-      href: '/platform-admin/team',
-      description: 'Manage platform administrators who maintain the system.',
-    })
-    navItems.push({
-      label: 'Audit Log',
-      href: '/platform-admin/audit',
-      description: 'Full change history across all organisations and platform actions.',
-    })
+    navItems.push({ label: 'Platform Administration', href: '/platform-admin', description: 'Create and manage client organisations and their admin accounts.' })
+    navItems.push({ label: 'Meetings Overview', href: '/platform-admin/meetings', description: 'View all meetings across every organisation for consistency oversight.' })
+    navItems.push({ label: 'System Options', href: '/platform-admin/options', description: 'Manage system-wide default dropdown options available to all organisations.' })
+    navItems.push({ label: 'KPI Catalogue', href: '/platform-admin/kpis', description: 'Manage the system KPI library and pre-load KPIs for organisations at onboarding.' })
+    navItems.push({ label: 'View All Users', href: '/platform-admin/users', description: 'Browse, edit and remove users across all organisations.' })
+    navItems.push({ label: 'Platform Team', href: '/platform-admin/team', description: 'Manage platform administrators who maintain the system.' })
+    navItems.push({ label: 'Audit Log', href: '/platform-admin/audit', description: 'Full change history across all organisations and platform actions.' })
   }
 
-  if (role === 'admin' && !isPlatformAdmin) {
-    navItems.push({
-      label: 'User Management',
-      href: '/admin/users',
-      description: 'Add, edit and manage users in your organisation.',
-    })
-    navItems.push({
-      label: 'Audit Log',
-      href: '/admin/audit',
-      description: 'View a record of all user management changes in your organisation.',
-    })
-    navItems.push({
-      label: 'Custom Fields',
-      href: '/admin/fields',
-      description: 'Define extra fields to capture on meetings, projects, KPIs and users.',
-    })
-    navItems.push({
-      label: 'Dropdown Options',
-      href: '/admin/options',
-      description: 'Manage the predefined options available in meeting and review dropdowns.',
-    })
-    navItems.push({
-      label: 'KPI Management',
-      href: '/admin/kpis',
-      description: 'Assign KPIs to your organisation, set targets and control visibility.',
-    })
-    navItems.push({
-      label: 'Teams',
-      href: '/admin/teams',
-      description: 'Create teams, assign members and scope KPIs to specific teams.',
-    })
+  if (isAdmin && !isPlatformAdmin) {
+    navItems.push({ label: 'User Management', href: '/admin/users', description: 'Add, edit and manage users in your organisation.' })
+    navItems.push({ label: 'Audit Log', href: '/admin/audit', description: 'View a record of all user management changes in your organisation.' })
+    navItems.push({ label: 'Custom Fields', href: '/admin/fields', description: 'Define extra fields to capture on meetings, projects, KPIs and users.' })
+    navItems.push({ label: 'Dropdown Options', href: '/admin/options', description: 'Manage the predefined options available in meeting and review dropdowns.' })
+    navItems.push({ label: 'KPI Management', href: '/admin/kpis', description: 'Assign KPIs to your organisation, set targets and control visibility.' })
+    navItems.push({ label: 'Teams', href: '/admin/teams', description: 'Create teams, assign members and scope KPIs to specific teams.' })
   }
 
   if (!isPlatformAdmin) {
-    navItems.push({
-      label: 'My Meetings',
-      href: '/meetings',
-      description: 'View, create and manage your 1:1s, team meetings and project meetings.',
-    })
-    navItems.push({
-      label: 'My Actions',
-      href: '/actions',
-      description: 'Track all actions agreed in your meetings.',
-    })
-    navItems.push({
-      label: 'My KPIs',
-      href: '/kpis',
-      description: 'View your organisation\'s KPIs and track performance over time.',
-    })
-    navItems.push({
-      label: 'Goals & OKRs',
-      href: '/goals',
-      description: 'Track objectives and key results aligned to your organisation\'s KPIs.',
-    })
+    navItems.push({ label: 'My Meetings', href: '/meetings', description: 'View, create and manage your 1:1s, team meetings and project meetings.' })
+    navItems.push({ label: 'My Actions', href: '/actions', description: 'Track all actions agreed in your meetings.' })
+    navItems.push({ label: 'My KPIs', href: '/kpis', description: 'View your organisation\'s KPIs and track performance over time.' })
+    navItems.push({ label: 'Goals & OKRs', href: '/goals', description: 'Track objectives and key results aligned to your organisation\'s KPIs.' })
   }
 
-  navItems.push({
-    label: 'Change Password',
-    href: '/account/change-password',
-    description: 'Update your login password.',
-  })
+  navItems.push({ label: 'Change Password', href: '/account/change-password', description: 'Update your login password.' })
 
   return (
     <div style={{ minHeight: '100vh', backgroundColor: '#f9fafb', fontFamily: 'system-ui, sans-serif' }}>
@@ -167,6 +216,214 @@ export default async function HomePage({
             {isPlatformAdmin ? 'Platform Administrator' : `${role.charAt(0).toUpperCase() + role.slice(1)}`}
           </p>
         </div>
+
+        {/* ── Dashboard widgets (org users only) ──────────────────────────── */}
+        {!isPlatformAdmin && (
+          <>
+            {/* ROW 1: Open Actions + OKR Progress */}
+            <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem', alignItems: 'flex-start', flexWrap: 'wrap' }}>
+
+              {/* Open Actions widget */}
+              <div style={{ flex: '1.2 1 280px', backgroundColor: 'white', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '1.25rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.875rem' }}>
+                  <h3 style={{ margin: 0, fontSize: '0.9375rem', fontWeight: 600, color: '#111827' }}>Open Actions</h3>
+                  <span style={{ fontSize: '0.75rem', fontWeight: 600, padding: '0.15rem 0.5rem', borderRadius: '9999px', backgroundColor: '#111827', color: 'white' }}>
+                    {openActions.length}
+                  </span>
+                </div>
+
+                {openActions.length === 0 ? (
+                  <div style={{ padding: '0.875rem', backgroundColor: '#f0fdf4', border: '1px solid #86efac', borderRadius: '6px', textAlign: 'center' }}>
+                    <span style={{ fontSize: '0.875rem', color: '#166534' }}>🎉 No open actions</span>
+                  </div>
+                ) : (
+                  <div>
+                    {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                    {openActions.map((action: any, idx: number) => {
+                      const overdue = isOverdue(action.due_date as string | null)
+                      const meeting = action.meetings as { title?: string; purpose?: string } | null
+                      const label = (action.action_text as string | null) ?? (action.title as string | null) ?? 'Untitled action'
+                      const meetingTitle = meeting?.title ?? meeting?.purpose ?? null
+                      return (
+                        <div key={action.id as string}>
+                          {idx > 0 && <div style={{ borderTop: '1px solid #f3f4f6', margin: '0.625rem 0' }} />}
+                          <div style={{ fontSize: '0.875rem', color: '#111827', lineHeight: 1.45, marginBottom: '0.25rem' }}>
+                            {label}
+                          </div>
+                          <div style={{ display: 'flex', gap: '0.75rem', fontSize: '0.75rem', flexWrap: 'wrap' }}>
+                            {action.due_date && (
+                              <span style={{ color: overdue ? '#dc2626' : '#6b7280', fontWeight: overdue ? 600 : 400 }}>
+                                {overdue ? '⚠ Overdue · ' : ''}Due {new Date(action.due_date as string).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
+                              </span>
+                            )}
+                            {meetingTitle && (
+                              <span style={{ color: '#9ca3af' }}>from {meetingTitle}</span>
+                            )}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+
+                <div style={{ marginTop: '1rem', paddingTop: '0.75rem', borderTop: '1px solid #f3f4f6' }}>
+                  <a href="/actions?filter=open" style={{ fontSize: '0.8125rem', color: '#2563eb', textDecoration: 'none' }}>
+                    View all open actions →
+                  </a>
+                </div>
+              </div>
+
+              {/* OKR Progress widget */}
+              <div style={{ flex: '1 1 220px', backgroundColor: 'white', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '1.25rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.875rem' }}>
+                  <h3 style={{ margin: 0, fontSize: '0.9375rem', fontWeight: 600, color: '#111827' }}>Goals & OKRs</h3>
+                  <span style={{ fontSize: '0.75rem', fontWeight: 600, padding: '0.15rem 0.5rem', borderRadius: '9999px', backgroundColor: '#eff6ff', color: '#1d4ed8' }}>
+                    {activeObjectives.length} active
+                  </span>
+                </div>
+
+                {activeObjectives.length === 0 ? (
+                  <p style={{ margin: 0, fontSize: '0.875rem', color: '#9ca3af' }}>No active objectives</p>
+                ) : (
+                  <div>
+                    {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                    {activeObjectives.map((obj: any, idx: number) => {
+                      const progress = progressMap[obj.id as string] ?? { total: 0, complete: 0 }
+                      const pct = progress.total > 0 ? Math.round((progress.complete / progress.total) * 100) : 0
+                      const tName = obj.team_id ? (teamMap[obj.team_id as string] ?? null) : null
+                      return (
+                        <div key={obj.id as string}>
+                          {idx > 0 && <div style={{ borderTop: '1px solid #f3f4f6', margin: '0.625rem 0' }} />}
+                          <a href={`/goals/${obj.id as string}`} style={{ textDecoration: 'none', display: 'block' }}>
+                            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.4rem', marginBottom: '0.3rem' }}>
+                              <span style={{ fontSize: '0.875rem', color: '#111827', fontWeight: 500, flex: 1, lineHeight: 1.4 }}>
+                                {obj.title as string}
+                              </span>
+                              {tName && (
+                                <span style={{ fontSize: '0.7rem', padding: '0.1rem 0.35rem', borderRadius: '9999px', backgroundColor: '#ecfeff', color: '#0e7490', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                                  {tName}
+                                </span>
+                              )}
+                            </div>
+                            {progress.total > 0 ? (
+                              <div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: '#6b7280', marginBottom: '0.2rem' }}>
+                                  <span>{progress.complete}/{progress.total} KRs</span>
+                                  <span>{pct}%</span>
+                                </div>
+                                <div style={{ height: '4px', backgroundColor: '#e5e7eb', borderRadius: '9999px', overflow: 'hidden' }}>
+                                  <div style={{ width: `${pct}%`, height: '100%', backgroundColor: pct === 100 ? '#166534' : '#2563eb', borderRadius: '9999px' }} />
+                                </div>
+                              </div>
+                            ) : (
+                              <span style={{ fontSize: '0.75rem', color: '#9ca3af' }}>No key results yet</span>
+                            )}
+                            {obj.end_date && (
+                              <div style={{ fontSize: '0.75rem', color: '#9ca3af', marginTop: '0.25rem' }}>
+                                Due {new Date(obj.end_date as string).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                              </div>
+                            )}
+                          </a>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+
+                <div style={{ marginTop: '1rem', paddingTop: '0.75rem', borderTop: '1px solid #f3f4f6' }}>
+                  <a href="/goals" style={{ fontSize: '0.8125rem', color: '#2563eb', textDecoration: 'none' }}>
+                    View all goals →
+                  </a>
+                </div>
+              </div>
+            </div>
+
+            {/* ROW 2: KPI Snapshot (full width) */}
+            <div style={{ backgroundColor: 'white', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '1.25rem', marginBottom: '2rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.875rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
+                  <h3 style={{ margin: 0, fontSize: '0.9375rem', fontWeight: 600, color: '#111827' }}>KPI Snapshot</h3>
+                  <span style={{ fontSize: '0.75rem', fontWeight: 600, padding: '0.15rem 0.5rem', borderRadius: '9999px', backgroundColor: '#f3f4f6', color: '#374151' }}>
+                    {snapshotKpis.length}
+                  </span>
+                </div>
+                <a href="/kpis" style={{ fontSize: '0.8125rem', color: '#2563eb', textDecoration: 'none' }}>View all →</a>
+              </div>
+
+              {snapshotKpis.length === 0 ? (
+                <p style={{ margin: 0, fontSize: '0.875rem', color: '#9ca3af' }}>No KPIs assigned to your organisation yet</p>
+              ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(175px, 1fr))', gap: '0.75rem' }}>
+                  {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                  {snapshotKpis.map((kpi: any) => {
+                    const records  = recordsByKpi[kpi.id as string] ?? []
+                    const current  = records[0]?.value ?? null
+                    const prev     = records[1]?.value ?? null
+                    const target   = kpi.target_value as number | null
+                    const unit     = kpi.unit as string | null
+
+                    let trendIcon  = '→'
+                    let trendColor = '#9ca3af'
+                    if (current != null && prev != null) {
+                      if (current > prev)      { trendIcon = '↑'; trendColor = '#166534' }
+                      else if (current < prev) { trendIcon = '↓'; trendColor = '#dc2626' }
+                    }
+
+                    const onTarget = target != null && current != null && current >= target
+
+                    return (
+                      <a
+                        key={kpi.id as string}
+                        href={`/kpis/${kpi.id as string}`}
+                        style={{
+                          display: 'block',
+                          backgroundColor: '#f9fafb',
+                          border: '1px solid #e5e7eb',
+                          borderRadius: '6px',
+                          padding: '0.75rem',
+                          textDecoration: 'none',
+                        }}
+                      >
+                        <div style={{ fontSize: '0.8125rem', color: '#6b7280', marginBottom: '0.375rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {kpi.name as string}
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.375rem', marginBottom: '0.35rem' }}>
+                          <span style={{ fontSize: '1.25rem', fontWeight: 700, color: '#111827' }}>
+                            {current != null ? current.toLocaleString() : '—'}
+                          </span>
+                          {unit && current != null && (
+                            <span style={{ fontSize: '0.8125rem', color: '#9ca3af' }}>{unit}</span>
+                          )}
+                          {current != null && (
+                            <span style={{ fontSize: '0.9rem', color: trendColor, marginLeft: 'auto', fontWeight: 600 }}>{trendIcon}</span>
+                          )}
+                        </div>
+                        {target != null && current != null && (
+                          <span style={{
+                            fontSize: '0.7rem',
+                            padding: '0.1rem 0.35rem',
+                            borderRadius: '9999px',
+                            backgroundColor: onTarget ? '#f0fdf4' : '#fef2f2',
+                            color: onTarget ? '#166534' : '#991b1b',
+                          }}>
+                            {onTarget ? '✓ on target' : '✗ below target'}
+                          </span>
+                        )}
+                      </a>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          </>
+        )}
+
+        {/* ── Quick Access ──────────────────────────────────────────────────── */}
+        {!isPlatformAdmin && (
+          <h2 style={{ margin: '0 0 0.75rem 0', fontSize: '0.75rem', fontWeight: 600, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            Quick Access
+          </h2>
+        )}
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '1rem' }}>
           {navItems.map((item) => (
