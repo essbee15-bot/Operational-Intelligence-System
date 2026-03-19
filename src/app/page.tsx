@@ -37,6 +37,12 @@ export default async function HomePage({
   let progressMap: Record<string, { total: number; complete: number }> = {}
   let teamMap: Record<string, string> = {}
 
+  // Pulse surveys widget data
+  let pendingSurveyCount = 0
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let pulseAdminStats: { bestTeam: string | null; worstTeam: string | null; responseCount: number; periodLabel: string } | null = null
+  let hasPulseSurveys = false
+
   if (!isPlatformAdmin && profile?.organization_id) {
     const adminClient = createAdminClient()
 
@@ -137,6 +143,98 @@ export default async function HomePage({
     teamMap = Object.fromEntries(
       (teamsRaw ?? []).map(t => [t.id as string, t.name as string])
     )
+
+    // 7. Pulse surveys widget
+    const { data: activeSurveys } = await adminClient
+      .from('pulse_surveys')
+      .select('id')
+      .eq('organization_id', profile.organization_id)
+      .eq('is_active', true)
+      .limit(1)
+
+    hasPulseSurveys = (activeSurveys ?? []).length > 0
+
+    if (hasPulseSurveys) {
+      // Open periods for org
+      const { data: openPeriodsRaw } = await adminClient
+        .from('pulse_periods')
+        .select('id, period_label, survey_id')
+        .eq('organization_id', profile.organization_id)
+        .eq('is_closed', false)
+
+      const openPeriodIds = (openPeriodsRaw ?? []).map(p => p.id as string)
+
+      if (openPeriodIds.length > 0) {
+        // User's completions for open periods
+        const { data: myTeamMemberships } = await adminClient
+          .from('team_members')
+          .select('team_id')
+          .eq('user_id', user.id)
+          .eq('organization_id', profile.organization_id)
+
+        const myTids = (myTeamMemberships ?? []).map(m => m.team_id as string)
+        const completedKeys = new Set<string>()
+
+        if (myTids.length > 0) {
+          const { data: completionsRaw } = await adminClient
+            .from('pulse_completions')
+            .select('period_id, team_id')
+            .eq('user_id', user.id)
+            .in('period_id', openPeriodIds)
+
+          ;(completionsRaw ?? []).forEach(c => {
+            completedKeys.add(`${c.period_id as string}:${c.team_id as string}`)
+          })
+
+          // Count pending: (period × team) where not completed
+          for (const p of openPeriodsRaw ?? []) {
+            for (const tid of myTids) {
+              if (!completedKeys.has(`${p.id as string}:${tid}`)) {
+                pendingSurveyCount++
+              }
+            }
+          }
+        }
+      }
+
+      // Admin: best/worst team from most recent closed period
+      if (isAdmin) {
+        const { data: recentClosed } = await adminClient
+          .from('pulse_periods')
+          .select('id, period_label')
+          .eq('organization_id', profile.organization_id)
+          .eq('is_closed', true)
+          .order('closes_at', { ascending: false })
+          .limit(1)
+
+        const recentPeriod = (recentClosed ?? [])[0] ?? null
+
+        if (recentPeriod) {
+          const { data: closedResponses } = await adminClient
+            .from('pulse_responses')
+            .select('team_id')
+            .eq('period_id', recentPeriod.id as string)
+            .eq('organization_id', profile.organization_id)
+
+          const countByTeam: Record<string, number> = {}
+          ;(closedResponses ?? []).forEach(r => {
+            const tid = r.team_id as string
+            countByTeam[tid] = (countByTeam[tid] ?? 0) + 1
+          })
+
+          const eligible = Object.entries(countByTeam)
+            .filter(([, c]) => c >= 3)
+            .sort(([, a], [, b]) => b - a)
+
+          pulseAdminStats = {
+            bestTeam:     eligible.length >= 2 ? (teamMap[eligible[0]![0]] ?? null) : null,
+            worstTeam:    eligible.length >= 2 ? (teamMap[eligible[eligible.length - 1]![0]] ?? null) : null,
+            responseCount: (closedResponses ?? []).length,
+            periodLabel:  recentPeriod.period_label as string,
+          }
+        }
+      }
+    }
   }
 
   const now = new Date()
@@ -164,6 +262,7 @@ export default async function HomePage({
     navItems.push({ label: 'Dropdown Options', href: '/admin/options', description: 'Manage the predefined options available in meeting and review dropdowns.' })
     navItems.push({ label: 'KPI Management', href: '/admin/kpis', description: 'Assign KPIs to your organisation, set targets and control visibility.' })
     navItems.push({ label: 'Teams', href: '/admin/teams', description: 'Create teams, assign members and scope KPIs to specific teams.' })
+    navItems.push({ label: 'Pulse Surveys', href: '/admin/surveys', description: 'Create anonymous team pulse surveys and view aggregated results. Individual responses are never linked to anyone.' })
   }
 
   if (!isPlatformAdmin) {
@@ -171,6 +270,7 @@ export default async function HomePage({
     navItems.push({ label: 'My Actions', href: '/actions', description: 'Track all actions agreed in your meetings.' })
     navItems.push({ label: 'My KPIs', href: '/kpis', description: 'View your organisation\'s KPIs and track performance over time.' })
     navItems.push({ label: 'Goals & OKRs', href: '/goals', description: 'Track objectives and key results aligned to your organisation\'s KPIs.' })
+    navItems.push({ label: 'My Surveys', href: '/surveys', description: 'Respond to your team\'s pulse surveys anonymously. Your answers are never linked to you.' })
   }
 
   navItems.push({ label: 'Change Password', href: '/account/change-password', description: 'Update your login password.' })
@@ -339,7 +439,63 @@ export default async function HomePage({
               </div>
             </div>
 
-            {/* ROW 2: KPI Snapshot (full width) */}
+            {/* ROW 2: Pulse Surveys widget (shown only when org has active surveys) */}
+            {hasPulseSurveys && (
+              <div style={{ backgroundColor: 'white', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '1.25rem', marginBottom: '1rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
+                  <h3 style={{ margin: 0, fontSize: '0.9375rem', fontWeight: 600, color: '#111827' }}>Pulse Surveys</h3>
+                  <a href={isAdmin ? '/admin/surveys' : '/surveys'} style={{ fontSize: '0.8125rem', color: '#2563eb', textDecoration: 'none' }}>
+                    {isAdmin ? 'Manage →' : 'View all →'}
+                  </a>
+                </div>
+
+                {/* Contributor / Manager view: pending count */}
+                {!isAdmin && (
+                  pendingSurveyCount > 0 ? (
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#fefce8', border: '1px solid #fde68a', borderRadius: '6px', padding: '0.75rem 1rem' }}>
+                      <span style={{ fontSize: '0.875rem', color: '#92400e' }}>
+                        📋 <strong>{pendingSurveyCount}</strong> survey{pendingSurveyCount !== 1 ? 's' : ''} awaiting your response
+                      </span>
+                      <a href="/surveys" style={{ fontSize: '0.8125rem', padding: '0.375rem 0.75rem', backgroundColor: '#92400e', color: 'white', borderRadius: '4px', textDecoration: 'none', fontWeight: 500, whiteSpace: 'nowrap' }}>
+                        Complete →
+                      </a>
+                    </div>
+                  ) : (
+                    <div style={{ backgroundColor: '#f0fdf4', border: '1px solid #86efac', borderRadius: '6px', padding: '0.75rem 1rem' }}>
+                      <span style={{ fontSize: '0.875rem', color: '#166534' }}>✓ All surveys complete — thank you for your feedback!</span>
+                    </div>
+                  )
+                )}
+
+                {/* Admin view: best/worst team from last closed period */}
+                {isAdmin && (
+                  pulseAdminStats ? (
+                    <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                      <span style={{ fontSize: '0.8125rem', color: '#6b7280' }}>Last period: <strong>{pulseAdminStats.periodLabel}</strong> · {pulseAdminStats.responseCount} responses</span>
+                      {pulseAdminStats.bestTeam && (
+                        <span style={{ fontSize: '0.8125rem', padding: '0.2rem 0.625rem', borderRadius: '9999px', backgroundColor: '#f0fdf4', color: '#166534', border: '1px solid #86efac' }}>
+                          🏆 Best: {pulseAdminStats.bestTeam}
+                        </span>
+                      )}
+                      {pulseAdminStats.worstTeam && (
+                        <span style={{ fontSize: '0.8125rem', padding: '0.2rem 0.625rem', borderRadius: '9999px', backgroundColor: '#fef2f2', color: '#991b1b', border: '1px solid #fca5a5' }}>
+                          ⚠ Attention: {pulseAdminStats.worstTeam}
+                        </span>
+                      )}
+                      {pendingSurveyCount > 0 && (
+                        <span style={{ fontSize: '0.8125rem', color: '#9ca3af' }}>+ {pendingSurveyCount} open survey{pendingSurveyCount !== 1 ? 's' : ''} active</span>
+                      )}
+                    </div>
+                  ) : (
+                    <p style={{ margin: 0, fontSize: '0.875rem', color: '#9ca3af' }}>
+                      No closed periods yet. <a href="/admin/surveys" style={{ color: '#2563eb' }}>Open a period</a> to start collecting responses.
+                    </p>
+                  )
+                )}
+              </div>
+            )}
+
+            {/* ROW 3: KPI Snapshot (full width) */}
             <div style={{ backgroundColor: 'white', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '1.25rem', marginBottom: '2rem' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.875rem' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}>

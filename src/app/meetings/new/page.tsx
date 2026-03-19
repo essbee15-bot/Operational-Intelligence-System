@@ -150,6 +150,7 @@ export default async function NewMeetingPage({
               </label>
               <select
                 id="previous_meeting_id" name="previous_meeting_id"
+                defaultValue={(previousMeetings ?? []).filter(m => m.meeting_type === 'one_on_one')[0]?.id ?? ''}
                 style={{ padding: '0.5rem', border: '1px solid #d1d5db', borderRadius: '4px', fontSize: '0.875rem', backgroundColor: 'white' }}
               >
                 <option value="">None (new series)</option>
@@ -236,6 +237,7 @@ export default async function NewMeetingPage({
               </label>
               <select
                 id="previous_meeting_id" name="previous_meeting_id"
+                defaultValue={(previousMeetings ?? []).filter(m => m.meeting_type === 'performance_review')[0]?.id ?? ''}
                 style={{ padding: '0.5rem', border: '1px solid #d1d5db', borderRadius: '4px', fontSize: '0.875rem', backgroundColor: 'white' }}
               >
                 <option value="">None (first review)</option>
@@ -325,6 +327,7 @@ export default async function NewMeetingPage({
               </label>
               <select
                 id="previous_meeting_id" name="previous_meeting_id"
+                defaultValue={(previousMeetings ?? []).filter(m => m.meeting_type === activeType)[0]?.id ?? ''}
                 style={{ padding: '0.5rem', border: '1px solid #d1d5db', borderRadius: '4px', fontSize: '0.875rem', backgroundColor: 'white' }}
               >
                 <option value="">None (new series)</option>
