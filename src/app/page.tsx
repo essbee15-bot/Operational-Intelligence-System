@@ -84,6 +84,11 @@ export default async function HomePage({
       href: '/admin/options',
       description: 'Manage the predefined options available in meeting and review dropdowns.',
     })
+    navItems.push({
+      label: 'KPI Management',
+      href: '/admin/kpis',
+      description: 'Assign KPIs to your organisation, set targets and control visibility.',
+    })
   }
 
   if (!isPlatformAdmin) {
@@ -96,6 +101,11 @@ export default async function HomePage({
       label: 'My Actions',
       href: '/actions',
       description: 'Track all actions agreed in your meetings.',
+    })
+    navItems.push({
+      label: 'My KPIs',
+      href: '/kpis',
+      description: 'View your organisation\'s KPIs and track performance over time.',
     })
   }
 
