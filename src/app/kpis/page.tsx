@@ -57,12 +57,12 @@ export default async function KpisPage({
 
   const myTeamIds = new Set((myMemberships ?? []).map(m => m.team_id as string))
 
-  // Apply visibility filter for contributors
+  // Apply visibility filter: all users see all KPIs, but team-scoped KPIs
+  // are only visible to members of that team (or managers/admins)
   const kpis = isManager
     ? (kpisRaw ?? [])
     : (kpisRaw ?? []).filter(k =>
-        k.audience !== 'management_only' &&
-        (k.team_id == null || myTeamIds.has(k.team_id as string))
+        k.team_id == null || myTeamIds.has(k.team_id as string)
       )
 
   // For each KPI, get the two most recent records (to compute current value + trend)
@@ -112,7 +112,7 @@ export default async function KpisPage({
           <p style={{ margin: 0, color: '#6b7280', fontSize: '0.875rem' }}>
             {isManager
               ? 'All active KPIs for your organisation. Record values and track trends.'
-              : 'Organisation KPIs visible to your role.'}
+              : 'All active KPIs for your organisation.'}
           </p>
         </div>
         {isManager && (

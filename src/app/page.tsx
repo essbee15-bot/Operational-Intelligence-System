@@ -68,12 +68,12 @@ export default async function HomePage({
 
     const myTeamIds = new Set((myMemberships ?? []).map(m => m.team_id as string))
 
+    // All users see all KPIs; contributors only filtered by team membership
     const allVisible = isManager
       ? (kpisRaw ?? [])
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       : (kpisRaw ?? []).filter((k: any) =>
-          k.audience !== 'management_only' &&
-          (k.team_id == null || myTeamIds.has(k.team_id as string))
+          k.team_id == null || myTeamIds.has(k.team_id as string)
         )
 
     snapshotKpis = allVisible.slice(0, 6)

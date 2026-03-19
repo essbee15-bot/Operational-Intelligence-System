@@ -91,14 +91,9 @@ export default async function OrgPreviewPage({
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const allKpis: any[] = kpisRaw ?? []
-    // Contributor view hides management_only KPIs; admin/manager see everything
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const filteredKpis = roleView === 'contributor'
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      ? allKpis.filter((k: any) => k.audience !== 'management_only')
-      : allKpis
-
-    snapshotKpis = filteredKpis.slice(0, 6)
+    // All roles see all KPIs (audience filtering removed); team-scoped filtering
+    // cannot be simulated in preview without a specific user context
+    snapshotKpis = allKpis.slice(0, 6)
 
     // 4. Latest KPI records (batch, up to 2 per KPI)
     if (snapshotKpis.length > 0) {
@@ -267,11 +262,9 @@ export default async function OrgPreviewPage({
             fontSize: '0.8125rem',
             color: '#92400e',
           }}>
-            ℹ Open actions are shown org-wide (not personal). KPI audience filtering reflects the selected role.
-            Team-scoped KPIs are shown regardless of team membership in this preview.
-            {roleView === 'contributor' && (
-              <span style={{ fontWeight: 600 }}> KPIs marked <span style={{ backgroundColor: '#fef3c7', padding: '0 0.25rem', borderRadius: '3px' }}>mgmt</span> are hidden from contributors.</span>
-            )}
+            ℹ Open actions are shown org-wide (not personal). All KPIs are visible to every role —
+            team-scoped KPIs are shown regardless of team membership in this preview.
+            KPIs marked <span style={{ backgroundColor: '#fef3c7', padding: '0 0.25rem', borderRadius: '3px' }}>mgmt</span> are tagged management-only in the system but visible to all users.
           </div>
 
           {/* ROW 1: Open Actions + OKR Progress */}
@@ -394,17 +387,10 @@ export default async function OrgPreviewPage({
                   {snapshotKpis.length}
                 </span>
               </div>
-              {roleView === 'contributor' && (
-                <span style={{ fontSize: '0.75rem', color: '#92400e', backgroundColor: '#fef3c7', padding: '0.15rem 0.5rem', borderRadius: '9999px' }}>
-                  management_only hidden
-                </span>
-              )}
             </div>
 
             {snapshotKpis.length === 0 ? (
-              <p style={{ margin: 0, fontSize: '0.875rem', color: '#9ca3af' }}>
-                {roleView === 'contributor' ? 'No KPIs visible to contributors in this org' : 'No KPIs assigned to this organisation'}
-              </p>
+              <p style={{ margin: 0, fontSize: '0.875rem', color: '#9ca3af' }}>No KPIs assigned to this organisation</p>
             ) : (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(175px, 1fr))', gap: '0.75rem' }}>
                 {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
