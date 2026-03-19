@@ -132,6 +132,7 @@ export async function updateOrgKpiSettings(formData: FormData) {
   const ownerId    = (formData.get('owner_id') as string) || null
   const audience   = formData.get('audience') as string || 'everyone'
   const isActive   = formData.get('is_active') !== 'false'
+  const teamId     = (formData.get('team_id') as string) || null
 
   if (!kpiId)                              redirect('/admin/kpis?message=Missing KPI ID')
   if (!VALID_AUDIENCES.includes(audience)) redirect('/admin/kpis?message=Invalid audience')
@@ -143,6 +144,7 @@ export async function updateOrgKpiSettings(formData: FormData) {
       owner_id:     ownerId || null,
       audience,
       is_active:    isActive,
+      team_id:      teamId || null,
     })
     .eq('id', kpiId)
     .eq('organization_id', profile.organization_id)

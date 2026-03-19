@@ -40,8 +40,8 @@ export default async function KpisPage({
   const isManager = profile.role === 'admin' || profile.role === 'manager'
   const adminClient = createAdminClient()
 
-  // Load org's active KPIs
-  let query = adminClient
+  // Load all org's active KPIs (audience/team filtering done client-side below)
+  const { data: kpisRaw } = await adminClient
     .from('kpis')
     .select('*')
     .eq('organization_id', profile.organization_id)
@@ -49,12 +49,21 @@ export default async function KpisPage({
     .order('category')
     .order('display_order')
 
-  // Contributors can only see 'everyone' audience KPIs
-  if (!isManager) {
-    query = query.eq('audience', 'everyone')
-  }
+  // Load team memberships for current user (needed for contributor filtering)
+  const { data: myMemberships } = await adminClient
+    .from('team_members')
+    .select('team_id')
+    .eq('user_id', profile.id)
 
-  const { data: kpis } = await query
+  const myTeamIds = new Set((myMemberships ?? []).map(m => m.team_id as string))
+
+  // Apply visibility filter for contributors
+  const kpis = isManager
+    ? (kpisRaw ?? [])
+    : (kpisRaw ?? []).filter(k =>
+        k.audience !== 'management_only' &&
+        (k.team_id == null || myTeamIds.has(k.team_id as string))
+      )
 
   // For each KPI, get the two most recent records (to compute current value + trend)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

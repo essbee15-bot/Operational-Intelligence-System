@@ -67,8 +67,19 @@ export default async function AdminKpisPage({
     .eq('is_anonymised', false)
     .order('full_name')
 
+  // Org teams for team select
+  const { data: orgTeams } = await adminClient
+    .from('teams')
+    .select('id, name')
+    .eq('organization_id', profile.organization_id)
+    .order('name')
+
   const userMap: Record<string, string> = Object.fromEntries(
     (orgUsers ?? []).map(u => [u.id, u.full_name ?? u.email ?? 'Unknown'])
+  )
+
+  const teamMap: Record<string, string> = Object.fromEntries(
+    (orgTeams ?? []).map(t => [t.id as string, t.name as string])
   )
 
   // System KPIs not yet assigned to this org
@@ -167,6 +178,7 @@ export default async function AdminKpisPage({
                           <th style={{ textAlign: 'left', padding: '0.5rem 0.875rem', fontWeight: 600, color: '#374151' }}>KPI</th>
                           <th style={{ textAlign: 'left', padding: '0.5rem 0.875rem', fontWeight: 600, color: '#374151' }}>Target</th>
                           <th style={{ textAlign: 'left', padding: '0.5rem 0.875rem', fontWeight: 600, color: '#374151' }}>Owner</th>
+                          <th style={{ textAlign: 'left', padding: '0.5rem 0.875rem', fontWeight: 600, color: '#374151' }}>Team</th>
                           <th style={{ textAlign: 'left', padding: '0.5rem 0.875rem', fontWeight: 600, color: '#374151' }}>Visibility</th>
                           <th style={{ textAlign: 'left', padding: '0.5rem 0.875rem', fontWeight: 600, color: '#374151' }}>Status</th>
                           <th style={{ padding: '0.5rem 0.875rem' }}></th>
@@ -177,7 +189,7 @@ export default async function AdminKpisPage({
                           const isEditing = editId === (kpi.id as string)
                           return (
                             <React.Fragment key={kpi.id as string}>
-                              <tr style={{ borderBottom: !isEditing && idx < kpis.length - 1 ? '1px solid #f3f4f6' : 'none', opacity: kpi.is_active ? 1 : 0.55 }}>
+                              <tr style={{ borderBottom: !isEditing && idx < kpis.length - 1 ? '1px solid #f3f4f6' : 'none', opacity: (kpi.is_active as boolean) ? 1 : 0.55 }}>
                                 <td style={{ padding: '0.625rem 0.875rem' }}>
                                   <div style={{ fontWeight: 500, color: '#111827' }}>{kpi.name as string}</div>
                                   <div style={{ fontSize: '0.75rem', color: '#9ca3af', marginTop: '0.125rem' }}>
@@ -190,6 +202,9 @@ export default async function AdminKpisPage({
                                 </td>
                                 <td style={{ padding: '0.625rem 0.875rem', color: '#6b7280' }}>
                                   {kpi.owner_id ? userMap[kpi.owner_id as string] ?? '—' : '—'}
+                                </td>
+                                <td style={{ padding: '0.625rem 0.875rem', color: '#6b7280' }}>
+                                  {kpi.team_id ? (teamMap[kpi.team_id as string] ?? '—') : '—'}
                                 </td>
                                 <td style={{ padding: '0.625rem 0.875rem' }}>
                                   <span style={{ fontSize: '0.7rem', padding: '0.125rem 0.375rem', borderRadius: '9999px', backgroundColor: kpi.audience === 'management_only' ? '#fef2f2' : '#f0fdf4', color: kpi.audience === 'management_only' ? '#991b1b' : '#166534' }}>
@@ -218,7 +233,7 @@ export default async function AdminKpisPage({
 
                               {isEditing && (
                                 <tr>
-                                  <td colSpan={6} style={{ padding: 0, borderBottom: idx < kpis.length - 1 ? '1px solid #f3f4f6' : 'none' }}>
+                                  <td colSpan={7} style={{ padding: 0, borderBottom: idx < kpis.length - 1 ? '1px solid #f3f4f6' : 'none' }}>
                                     <div style={{ padding: '1rem 0.875rem', backgroundColor: '#f0f7ff', borderLeft: '3px solid #2563eb' }}>
                                       <form style={{ display: 'flex', flexDirection: 'column', gap: '0.625rem' }}>
                                         <input type="hidden" name="kpi_id" value={kpi.id as string} />
@@ -253,6 +268,15 @@ export default async function AdminKpisPage({
                                             <select name="is_active" defaultValue={String(kpi.is_active)} style={{ padding: '0.4rem 0.5rem', border: '1px solid #93c5fd', borderRadius: '4px', fontSize: '0.8125rem', backgroundColor: 'white' }}>
                                               <option value="true">Active</option>
                                               <option value="false">Inactive</option>
+                                            </select>
+                                          </div>
+                                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                                            <label style={{ fontSize: '0.75rem', fontWeight: 500, color: '#374151' }}>Team</label>
+                                            <select name="team_id" defaultValue={kpi.team_id as string ?? ''} style={{ padding: '0.4rem 0.5rem', border: '1px solid #93c5fd', borderRadius: '4px', fontSize: '0.8125rem', backgroundColor: 'white' }}>
+                                              <option value="">— No team —</option>
+                                              {(orgTeams ?? []).map(t => (
+                                                <option key={t.id as string} value={t.id as string}>{t.name as string}</option>
+                                              ))}
                                             </select>
                                           </div>
                                         </div>

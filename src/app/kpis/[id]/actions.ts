@@ -27,16 +27,30 @@ async function verifyKpiAccess(kpiId: string, requireManager = false) {
   // Verify KPI belongs to this org and audience allows access
   const { data: kpi } = await adminClient
     .from('kpis')
-    .select('id, organization_id, audience')
+    .select('id, organization_id, audience, team_id')
     .eq('id', kpiId)
     .eq('organization_id', profile.organization_id)
     .single()
 
   if (!kpi) redirect('/kpis?message=KPI not found')
 
+  const isManager = profile.role === 'admin' || profile.role === 'manager'
+
   // Audience check: contributors can't see management_only KPIs
-  if (kpi.audience === 'management_only' && profile.role === 'contributor') {
+  if (kpi.audience === 'management_only' && !isManager) {
     redirect('/kpis?message=You do not have access to this KPI')
+  }
+
+  // Team check: contributors can only see team-scoped KPIs they are a member of
+  if (kpi.team_id && !isManager) {
+    const { data: membership } = await adminClient
+      .from('team_members')
+      .select('team_id')
+      .eq('team_id', kpi.team_id as string)
+      .eq('user_id', profile.id)
+      .single()
+
+    if (!membership) redirect('/kpis?message=You are not a member of this KPI\'s team')
   }
 
   return { adminClient, user, profile, kpi }

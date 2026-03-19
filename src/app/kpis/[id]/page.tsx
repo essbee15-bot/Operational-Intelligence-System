@@ -59,6 +59,18 @@ export default async function KpiDetailPage({
     redirect('/kpis?message=You do not have access to this KPI')
   }
 
+  // Team check: contributors can only view team-scoped KPIs they are a member of
+  if (kpi.team_id && !isManager) {
+    const { data: membership } = await adminClient
+      .from('team_members')
+      .select('team_id')
+      .eq('team_id', kpi.team_id as string)
+      .eq('user_id', profile.id)
+      .single()
+
+    if (!membership) redirect('/kpis?message=You are not a member of this KPI\'s team')
+  }
+
   // Load up to 24 records, newest first
   const { data: records } = await adminClient
     .from('kpi_records')

@@ -89,6 +89,11 @@ export default async function HomePage({
       href: '/admin/kpis',
       description: 'Assign KPIs to your organisation, set targets and control visibility.',
     })
+    navItems.push({
+      label: 'Teams',
+      href: '/admin/teams',
+      description: 'Create teams, assign members and scope KPIs to specific teams.',
+    })
   }
 
   if (!isPlatformAdmin) {
