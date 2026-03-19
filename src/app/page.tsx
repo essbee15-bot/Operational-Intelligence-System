@@ -43,6 +43,10 @@ export default async function HomePage({
   let pulseAdminStats: { bestTeam: string | null; worstTeam: string | null; responseCount: number; periodLabel: string } | null = null
   let hasPulseSurveys = false
 
+  // Projects widget data
+  let activeProjectCount = 0
+  let overdueProjectCount = 0
+
   if (!isPlatformAdmin && profile?.organization_id) {
     const adminClient = createAdminClient()
 
@@ -235,6 +239,89 @@ export default async function HomePage({
         }
       }
     }
+
+    // 8. Projects widget — count active/planning projects visible to this user
+    {
+      const today = new Date().toISOString()
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let visibleProjects: any[] = []
+
+      if (isAdmin) {
+        const { data } = await adminClient
+          .from('projects')
+          .select('id, status, end_date')
+          .eq('organization_id', profile.organization_id)
+          .in('status', ['planning', 'active', 'on_hold'])
+        visibleProjects = data ?? []
+      } else if (isManager) {
+        const { data: ledTeams } = await adminClient
+          .from('teams')
+          .select('id')
+          .eq('organization_id', profile.organization_id)
+          .eq('lead_id', user.id)
+        const ledTeamIds = (ledTeams ?? []).map(t => t.id as string)
+
+        const { data: ownedP } = await adminClient
+          .from('projects')
+          .select('id, status, end_date')
+          .eq('organization_id', profile.organization_id)
+          .eq('owner_id', user.id)
+          .in('status', ['planning', 'active', 'on_hold'])
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        let teamP: any[] = []
+        if (ledTeamIds.length > 0) {
+          const { data: tp } = await adminClient
+            .from('projects')
+            .select('id, status, end_date')
+            .eq('organization_id', profile.organization_id)
+            .in('team_id', ledTeamIds)
+            .in('status', ['planning', 'active', 'on_hold'])
+          teamP = tp ?? []
+        }
+        const seen = new Set<string>()
+        for (const p of [...(ownedP ?? []), ...teamP]) {
+          if (!seen.has(p.id as string)) { seen.add(p.id as string); visibleProjects.push(p) }
+        }
+      } else {
+        const { data: ownedP } = await adminClient
+          .from('projects')
+          .select('id, status, end_date')
+          .eq('organization_id', profile.organization_id)
+          .eq('owner_id', user.id)
+          .in('status', ['planning', 'active', 'on_hold'])
+
+        const { data: actionProjects } = await adminClient
+          .from('action_items')
+          .select('project_id')
+          .eq('organization_id', profile.organization_id)
+          .eq('assignee_id', user.id)
+          .not('project_id', 'is', null)
+
+        const apIds = [...new Set((actionProjects ?? []).map(a => a.project_id as string))]
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        let ap: any[] = []
+        if (apIds.length > 0) {
+          const { data: apData } = await adminClient
+            .from('projects')
+            .select('id, status, end_date')
+            .eq('organization_id', profile.organization_id)
+            .in('id', apIds)
+            .in('status', ['planning', 'active', 'on_hold'])
+          ap = apData ?? []
+        }
+        const seen = new Set<string>()
+        for (const p of [...(ownedP ?? []), ...ap]) {
+          if (!seen.has(p.id as string)) { seen.add(p.id as string); visibleProjects.push(p) }
+        }
+      }
+
+      activeProjectCount = visibleProjects.length
+      overdueProjectCount = visibleProjects.filter(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (p: any) => p.end_date != null && (p.end_date as string) < today && (p.status as string) === 'active'
+      ).length
+    }
   }
 
   const now = new Date()
@@ -268,6 +355,7 @@ export default async function HomePage({
   if (!isPlatformAdmin) {
     navItems.push({ label: 'My Meetings', href: '/meetings', description: 'View, create and manage your 1:1s, team meetings and project meetings.' })
     navItems.push({ label: 'My Actions', href: '/actions', description: 'Track all actions agreed in your meetings.' })
+    navItems.push({ label: 'Projects', href: '/projects', description: 'Track active projects, outcomes, and their impact on team capacity.' })
     navItems.push({ label: 'My KPIs', href: '/kpis', description: 'View your organisation\'s KPIs and track performance over time.' })
     navItems.push({ label: 'Goals & OKRs', href: '/goals', description: 'Track objectives and key results aligned to your organisation\'s KPIs.' })
     navItems.push({ label: 'My Surveys', href: '/surveys', description: 'Respond to your team\'s pulse surveys anonymously. Your answers are never linked to you.' })
@@ -495,7 +583,32 @@ export default async function HomePage({
               </div>
             )}
 
-            {/* ROW 3: KPI Snapshot (full width) */}
+            {/* ROW 3: Projects widget */}
+            {activeProjectCount > 0 && (
+              <div style={{ backgroundColor: 'white', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '1.25rem', marginBottom: '1rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
+                  <h3 style={{ margin: 0, fontSize: '0.9375rem', fontWeight: 600, color: '#111827' }}>Projects</h3>
+                  <a href="/projects" style={{ fontSize: '0.8125rem', color: '#2563eb', textDecoration: 'none' }}>View all →</a>
+                </div>
+                <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                  <span style={{ fontSize: '0.875rem', color: '#374151' }}>
+                    <strong>{activeProjectCount}</strong> active project{activeProjectCount !== 1 ? 's' : ''} in progress
+                  </span>
+                  {overdueProjectCount > 0 && (
+                    <span style={{ fontSize: '0.8125rem', padding: '0.2rem 0.625rem', borderRadius: '9999px', backgroundColor: '#fef2f2', color: '#991b1b', border: '1px solid #fca5a5', fontWeight: 500 }}>
+                      ⚠ {overdueProjectCount} overdue
+                    </span>
+                  )}
+                  {overdueProjectCount === 0 && (
+                    <span style={{ fontSize: '0.8125rem', padding: '0.2rem 0.625rem', borderRadius: '9999px', backgroundColor: '#f0fdf4', color: '#166534', border: '1px solid #86efac' }}>
+                      ✓ None overdue
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* ROW 4: KPI Snapshot (full width) */}
             <div style={{ backgroundColor: 'white', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '1.25rem', marginBottom: '2rem' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.875rem' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
