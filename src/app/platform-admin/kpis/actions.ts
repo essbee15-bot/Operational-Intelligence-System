@@ -66,6 +66,45 @@ export async function createSystemKpi(formData: FormData) {
   redirect('/platform-admin/kpis?message=KPI added to catalogue')
 }
 
+export async function updateSystemKpi(formData: FormData) {
+  const { adminClient } = await verifyPlatformAdmin()
+
+  const kpiId      = formData.get('kpi_id') as string
+  const name       = (formData.get('name') as string)?.trim()
+  const category   = formData.get('category') as string
+  const description = (formData.get('description') as string)?.trim() || null
+  const unit       = (formData.get('unit') as string)?.trim() || null
+  const frequency  = formData.get('target_frequency') as string
+
+  if (!kpiId)                               redirect('/platform-admin/kpis?message=Missing KPI id')
+  if (!name)                                redirect('/platform-admin/kpis?message=KPI name is required')
+  if (!VALID_CATEGORIES.includes(category)) redirect('/platform-admin/kpis?message=Invalid category')
+  if (!VALID_FREQUENCIES.includes(frequency)) redirect('/platform-admin/kpis?message=Invalid frequency')
+  if (name.length > 200)                    redirect('/platform-admin/kpis?message=Name must be 200 characters or fewer')
+
+  const updates = { name, category, description, unit: unit || null, target_frequency: frequency }
+
+  // 1. Update the system template
+  const { error } = await adminClient
+    .from('kpis')
+    .update(updates)
+    .eq('id', kpiId)
+    .is('organization_id', null)
+
+  if (error) redirect(`/platform-admin/kpis?message=Failed to update: ${error.message}`)
+
+  // 2. Propagate wording changes to every org copy derived from this template.
+  //    We update name, description, unit and frequency — the fields the platform
+  //    admin controls. The org retains its own target_value and owner_id.
+  await adminClient
+    .from('kpis')
+    .update(updates)
+    .eq('template_kpi_id', kpiId)
+    .not('organization_id', 'is', null)
+
+  redirect('/platform-admin/kpis?message=KPI updated and synced to all organisations')
+}
+
 export async function deleteSystemKpi(formData: FormData) {
   const { adminClient } = await verifyPlatformAdmin()
 

@@ -1,8 +1,9 @@
+import React from 'react'
 import { createClient } from '@/utils/supabase/server'
 import { createAdminClient } from '@/utils/supabase/admin'
 import { redirect } from 'next/navigation'
 import {
-  createSystemKpi, deleteSystemKpi, toggleSystemKpi,
+  createSystemKpi, updateSystemKpi, deleteSystemKpi, toggleSystemKpi,
   assignKpiToOrg, createOrgKpi, removeOrgKpi,
 } from './actions'
 
@@ -108,9 +109,9 @@ function AddKpiForm({
 export default async function PlatformKpisPage({
   searchParams,
 }: {
-  searchParams: Promise<{ org_id?: string; message?: string }>
+  searchParams: Promise<{ org_id?: string; message?: string; edit?: string }>
 }) {
-  const { org_id: orgFilter, message } = await searchParams
+  const { org_id: orgFilter, message, edit: editId } = await searchParams
 
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -287,34 +288,111 @@ export default async function PlatformKpisPage({
                       </tr>
                     </thead>
                     <tbody>
-                      {kpis.map((kpi, idx) => (
-                        <tr key={kpi.id as string} style={{ borderBottom: idx < kpis.length - 1 ? '1px solid #f3f4f6' : 'none', opacity: kpi.is_active ? 1 : 0.5 }}>
-                          <td style={{ padding: '0.625rem 0.875rem', fontWeight: 500, color: '#111827' }}>{kpi.name as string}</td>
-                          <td style={{ padding: '0.625rem 0.875rem', color: '#6b7280', maxWidth: '280px' }}>{kpi.description as string ?? '—'}</td>
-                          <td style={{ padding: '0.625rem 0.875rem', color: '#374151' }}>{kpi.unit as string ?? '—'}</td>
-                          <td style={{ padding: '0.625rem 0.875rem', color: '#374151' }}>{FREQUENCIES[kpi.target_frequency as string] ?? kpi.target_frequency as string}</td>
-                          <td style={{ padding: '0.625rem 0.875rem' }}>
-                            <span style={{ fontSize: '0.7rem', padding: '0.125rem 0.375rem', borderRadius: '9999px', backgroundColor: kpi.is_active ? '#f0fdf4' : '#fef2f2', color: kpi.is_active ? '#166534' : '#991b1b' }}>
-                              {kpi.is_active ? 'Active' : 'Disabled'}
-                            </span>
-                          </td>
-                          <td style={{ padding: '0.625rem 0.875rem', textAlign: 'right', whiteSpace: 'nowrap' }}>
-                            <form style={{ display: 'inline', marginRight: '0.75rem' }}>
-                              <input type="hidden" name="kpi_id" value={kpi.id as string} />
-                              <input type="hidden" name="is_active" value={String(kpi.is_active)} />
-                              <button formAction={toggleSystemKpi} style={{ fontSize: '0.75rem', color: '#6b7280', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
-                                {kpi.is_active ? 'Disable' : 'Enable'}
-                              </button>
-                            </form>
-                            <form style={{ display: 'inline' }}>
-                              <input type="hidden" name="kpi_id" value={kpi.id as string} />
-                              <button formAction={deleteSystemKpi} style={{ fontSize: '0.75rem', color: '#dc2626', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
-                                Remove
-                              </button>
-                            </form>
-                          </td>
-                        </tr>
-                      ))}
+                      {kpis.map((kpi, idx) => {
+                        const isEditing = editId === (kpi.id as string)
+                        return (
+                          <React.Fragment key={kpi.id as string}>
+                            {/* ── Normal display row ── */}
+                            <tr style={{ borderBottom: (!isEditing && idx < kpis.length - 1) ? '1px solid #f3f4f6' : 'none', opacity: kpi.is_active ? 1 : 0.5 }}>
+                              <td style={{ padding: '0.625rem 0.875rem', fontWeight: 500, color: '#111827' }}>{kpi.name as string}</td>
+                              <td style={{ padding: '0.625rem 0.875rem', color: '#6b7280', maxWidth: '280px' }}>{kpi.description as string ?? '—'}</td>
+                              <td style={{ padding: '0.625rem 0.875rem', color: '#374151' }}>{kpi.unit as string ?? '—'}</td>
+                              <td style={{ padding: '0.625rem 0.875rem', color: '#374151' }}>{FREQUENCIES[kpi.target_frequency as string] ?? kpi.target_frequency as string}</td>
+                              <td style={{ padding: '0.625rem 0.875rem' }}>
+                                <span style={{ fontSize: '0.7rem', padding: '0.125rem 0.375rem', borderRadius: '9999px', backgroundColor: kpi.is_active ? '#f0fdf4' : '#fef2f2', color: kpi.is_active ? '#166534' : '#991b1b' }}>
+                                  {kpi.is_active ? 'Active' : 'Disabled'}
+                                </span>
+                              </td>
+                              <td style={{ padding: '0.625rem 0.875rem', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                                {isEditing ? (
+                                  <a href="/platform-admin/kpis" style={{ fontSize: '0.75rem', color: '#2563eb', textDecoration: 'none', marginRight: '0.75rem' }}>Cancel</a>
+                                ) : (
+                                  <a href={`/platform-admin/kpis?edit=${kpi.id as string}`} style={{ fontSize: '0.75rem', color: '#374151', textDecoration: 'none', marginRight: '0.75rem' }}>Edit</a>
+                                )}
+                                <form style={{ display: 'inline', marginRight: '0.75rem' }}>
+                                  <input type="hidden" name="kpi_id" value={kpi.id as string} />
+                                  <input type="hidden" name="is_active" value={String(kpi.is_active)} />
+                                  <button formAction={toggleSystemKpi} style={{ fontSize: '0.75rem', color: '#6b7280', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
+                                    {kpi.is_active ? 'Disable' : 'Enable'}
+                                  </button>
+                                </form>
+                                <form style={{ display: 'inline' }}>
+                                  <input type="hidden" name="kpi_id" value={kpi.id as string} />
+                                  <button formAction={deleteSystemKpi} style={{ fontSize: '0.75rem', color: '#dc2626', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
+                                    Remove
+                                  </button>
+                                </form>
+                              </td>
+                            </tr>
+
+                            {/* ── Inline edit form (shown when ?edit=<id>) ── */}
+                            {isEditing && (
+                              <tr>
+                                <td colSpan={6} style={{ padding: 0, borderBottom: idx < kpis.length - 1 ? '1px solid #f3f4f6' : 'none' }}>
+                                  <div style={{ padding: '1rem 0.875rem', backgroundColor: '#f0f7ff', borderLeft: '3px solid #2563eb' }}>
+                                    <p style={{ margin: '0 0 0.75rem 0', fontSize: '0.8125rem', fontWeight: 600, color: '#1d4ed8' }}>
+                                      Edit KPI — changes will automatically sync to all organisations using this template.
+                                    </p>
+                                    <form style={{ display: 'flex', flexDirection: 'column', gap: '0.625rem' }}>
+                                      <input type="hidden" name="kpi_id" value={kpi.id as string} />
+                                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '0.625rem' }}>
+                                        <div style={{ gridColumn: '1 / 3', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                                          <label style={{ fontSize: '0.75rem', fontWeight: 500, color: '#374151' }}>KPI Name *</label>
+                                          <input
+                                            name="name" type="text" required maxLength={200}
+                                            defaultValue={kpi.name as string}
+                                            style={{ padding: '0.4rem 0.5rem', border: '1px solid #93c5fd', borderRadius: '4px', fontSize: '0.8125rem' }}
+                                          />
+                                        </div>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                                          <label style={{ fontSize: '0.75rem', fontWeight: 500, color: '#374151' }}>Category *</label>
+                                          <select name="category" defaultValue={kpi.category as string} style={{ padding: '0.4rem 0.5rem', border: '1px solid #93c5fd', borderRadius: '4px', fontSize: '0.8125rem', backgroundColor: 'white' }}>
+                                            {CATEGORIES.map(c => <option key={c.key} value={c.key}>{c.label}</option>)}
+                                          </select>
+                                        </div>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                                          <label style={{ fontSize: '0.75rem', fontWeight: 500, color: '#374151' }}>Frequency</label>
+                                          <select name="target_frequency" defaultValue={kpi.target_frequency as string} style={{ padding: '0.4rem 0.5rem', border: '1px solid #93c5fd', borderRadius: '4px', fontSize: '0.8125rem', backgroundColor: 'white' }}>
+                                            {Object.entries(FREQUENCIES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                                          </select>
+                                        </div>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                                          <label style={{ fontSize: '0.75rem', fontWeight: 500, color: '#374151' }}>Unit</label>
+                                          <input
+                                            name="unit" type="text" maxLength={20}
+                                            defaultValue={kpi.unit as string ?? ''}
+                                            placeholder="£, %, count…"
+                                            style={{ padding: '0.4rem 0.5rem', border: '1px solid #93c5fd', borderRadius: '4px', fontSize: '0.8125rem' }}
+                                          />
+                                        </div>
+                                        <div style={{ gridColumn: '1 / 5', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                                          <label style={{ fontSize: '0.75rem', fontWeight: 500, color: '#374151' }}>Description</label>
+                                          <input
+                                            name="description" type="text" maxLength={300}
+                                            defaultValue={kpi.description as string ?? ''}
+                                            style={{ padding: '0.4rem 0.5rem', border: '1px solid #93c5fd', borderRadius: '4px', fontSize: '0.8125rem' }}
+                                          />
+                                        </div>
+                                      </div>
+                                      <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginTop: '0.25rem' }}>
+                                        <button
+                                          formAction={updateSystemKpi}
+                                          style={{ padding: '0.375rem 1rem', backgroundColor: '#2563eb', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.8125rem' }}
+                                        >
+                                          Save &amp; Sync
+                                        </button>
+                                        <a href="/platform-admin/kpis" style={{ padding: '0.375rem 0.75rem', fontSize: '0.8125rem', color: '#6b7280', textDecoration: 'none', border: '1px solid #d1d5db', borderRadius: '4px' }}>
+                                          Cancel
+                                        </a>
+                                      </div>
+                                    </form>
+                                  </div>
+                                </td>
+                              </tr>
+                            )}
+                          </React.Fragment>
+                        )
+                      })}
                     </tbody>
                   </table>
                 </div>
