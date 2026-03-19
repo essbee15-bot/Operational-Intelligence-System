@@ -350,12 +350,14 @@ export default async function HomePage({
     navItems.push({ label: 'KPI Management', href: '/admin/kpis', description: 'Assign KPIs to your organisation, set targets and control visibility.' })
     navItems.push({ label: 'Teams', href: '/admin/teams', description: 'Create teams, assign members and scope KPIs to specific teams.' })
     navItems.push({ label: 'Pulse Surveys', href: '/admin/surveys', description: 'Create anonymous team pulse surveys and view aggregated results. Individual responses are never linked to anyone.' })
+    navItems.push({ label: 'Billing', href: '/billing', description: 'Manage your subscription plan, view usage, and update payment details.' })
   }
 
   if (!isPlatformAdmin) {
     navItems.push({ label: 'My Meetings', href: '/meetings', description: 'View, create and manage your 1:1s, team meetings and project meetings.' })
     navItems.push({ label: 'My Actions', href: '/actions', description: 'Track all actions agreed in your meetings.' })
     navItems.push({ label: 'Projects', href: '/projects', description: 'Track active projects, outcomes, and their impact on team capacity.' })
+    navItems.push({ label: 'Reporting Lines', href: '/reporting', description: 'View the organisation\'s hierarchy — who reports to whom.' })
     navItems.push({ label: 'My KPIs', href: '/kpis', description: 'View your organisation\'s KPIs and track performance over time.' })
     navItems.push({ label: 'Goals & OKRs', href: '/goals', description: 'Track objectives and key results aligned to your organisation\'s KPIs.' })
     navItems.push({ label: 'My Surveys', href: '/surveys', description: 'Respond to your team\'s pulse surveys anonymously. Your answers are never linked to you.' })
