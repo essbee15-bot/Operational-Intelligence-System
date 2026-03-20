@@ -7,6 +7,10 @@ export async function resetPassword(formData: FormData) {
   const password = formData.get('password') as string
   const confirm = formData.get('confirm') as string
 
+  if (!password || !confirm) {
+    redirect('/login/reset-password?message=Invalid+form+submission')
+  }
+
   // Server-side validation (client minLength is UX only, not security).
   if (password.length < 8) {
     redirect('/login/reset-password?message=Password+must+be+at+least+8+characters')
@@ -20,6 +24,7 @@ export async function resetPassword(formData: FormData) {
   const { error } = await supabase.auth.updateUser({ password })
 
   if (error) {
+    console.error('[reset-password] updateUser failed:', error.message)
     redirect('/login/reset-password?message=Failed+to+update+password.+Please+try+again.')
   }
 
