@@ -343,25 +343,15 @@ export default async function HomePage({
   }
 
   if (isAdmin && !isPlatformAdmin) {
-    navItems.push({ label: 'User Management', href: '/admin/users', description: 'Add, edit and manage users in your organisation.' })
-    navItems.push({ label: 'Audit Log', href: '/admin/audit', description: 'View a record of all user management changes in your organisation.' })
-    navItems.push({ label: 'Custom Fields', href: '/admin/fields', description: 'Define extra fields to capture on meetings, projects, KPIs and users.' })
-    navItems.push({ label: 'Dropdown Options', href: '/admin/options', description: 'Manage the predefined options available in meeting and review dropdowns.' })
-    navItems.push({ label: 'KPI Management', href: '/admin/kpis', description: 'Assign KPIs to your organisation, set targets and control visibility.' })
-    navItems.push({ label: 'Teams', href: '/admin/teams', description: 'Create teams, assign members and scope KPIs to specific teams.' })
-    navItems.push({ label: 'Pulse Surveys', href: '/admin/surveys', description: 'Create anonymous team pulse surveys and view aggregated results. Individual responses are never linked to anyone.' })
-    navItems.push({ label: 'Billing', href: '/billing', description: 'Manage your subscription plan, view usage, and update payment details.' })
-    navItems.push({ label: 'AI Assistant', href: '/admin/ai', description: 'Configure the AI co-pilot — connect your own API key and let your team query organisational memory.' })
+    navItems.push({ label: 'Administration', href: '/admin', description: 'Manage users, teams, KPIs, billing, surveys, AI and all org settings.' })
   }
 
   if (!isPlatformAdmin) {
-    navItems.push({ label: 'My Meetings', href: '/meetings', description: 'View, create and manage your 1:1s, team meetings and project meetings.' })
+    navItems.push({ label: 'My Meetings', href: '/meetings', description: 'View and manage your 1:1s, team meetings, project meetings and pulse surveys.' })
     navItems.push({ label: 'My Actions', href: '/actions', description: 'Track all actions agreed in your meetings.' })
-    navItems.push({ label: 'Projects', href: '/projects', description: 'Track active projects, outcomes, and their impact on team capacity.' })
-    navItems.push({ label: 'Reporting Lines', href: '/reporting', description: 'View the organisation\'s hierarchy — who reports to whom.' })
     navItems.push({ label: 'My KPIs', href: '/kpis', description: 'View your organisation\'s KPIs and track performance over time.' })
     navItems.push({ label: 'Goals & OKRs', href: '/goals', description: 'Track objectives and key results aligned to your organisation\'s KPIs.' })
-    navItems.push({ label: 'My Surveys', href: '/surveys', description: 'Respond to your team\'s pulse surveys anonymously. Your answers are never linked to you.' })
+    navItems.push({ label: 'Reporting Lines', href: '/reporting', description: 'View the organisation\'s hierarchy — who reports to whom.' })
   }
 
   navItems.push({ label: 'Change Password', href: '/account/change-password', description: 'Update your login password.' })
@@ -692,11 +682,9 @@ export default async function HomePage({
         )}
 
         {/* ── Quick Access ──────────────────────────────────────────────────── */}
-        {!isPlatformAdmin && (
-          <h2 style={{ margin: '0 0 0.75rem 0', fontSize: '0.75rem', fontWeight: 600, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-            Quick Access
-          </h2>
-        )}
+        <h2 style={{ margin: '0 0 0.75rem 0', fontSize: '0.75rem', fontWeight: 600, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+          {isPlatformAdmin ? 'Platform Tools' : 'Quick Access'}
+        </h2>
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '1rem' }}>
           {navItems.map((item) => (
