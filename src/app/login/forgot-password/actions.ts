@@ -8,6 +8,8 @@ import { createAdminClient } from '@/utils/supabase/admin'
 export async function requestPasswordReset(formData: FormData) {
   const email = (formData.get('email') as string).trim().toLowerCase()
 
+  if (!email) redirect('/login/forgot-password')
+
   // Use the admin client (bypasses RLS) to check if this is a platform admin.
   // We must never reveal whether an email exists, but platform admins need
   // a different message since email reset won't be their recovery path.
@@ -24,11 +26,18 @@ export async function requestPasswordReset(formData: FormData) {
 
   // Derive the origin for the redirect URL.
   const headersList = await headers()
-  const origin =
+
+  const ALLOWED_ORIGINS = new Set(
+    [process.env.NEXT_PUBLIC_SITE_URL, 'http://localhost:3000'].filter(Boolean)
+  )
+
+  const rawOrigin =
     headersList.get('origin') ??
     (headersList.get('x-forwarded-proto')
       ? `${headersList.get('x-forwarded-proto')}://${headersList.get('host')}`
       : 'http://localhost:3000')
+
+  const origin = ALLOWED_ORIGINS.has(rawOrigin) ? rawOrigin : 'http://localhost:3000'
 
   const supabase = await createClient()
 
