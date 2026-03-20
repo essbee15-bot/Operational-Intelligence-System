@@ -24,9 +24,11 @@ export async function requestPasswordReset(formData: FormData) {
 
   // Derive the origin for the redirect URL.
   const headersList = await headers()
-  const origin = headersList.get('origin') ?? headersList.get('x-forwarded-proto')
-    ? `${headersList.get('x-forwarded-proto')}://${headersList.get('host')}`
-    : 'http://localhost:3000'
+  const origin =
+    headersList.get('origin') ??
+    (headersList.get('x-forwarded-proto')
+      ? `${headersList.get('x-forwarded-proto')}://${headersList.get('host')}`
+      : 'http://localhost:3000')
 
   const supabase = await createClient()
 
