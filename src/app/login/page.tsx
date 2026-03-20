@@ -11,7 +11,12 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
         </p>
 
         {message && (
-          <p style={{ textAlign: 'center', color: '#dc2626', fontSize: '0.875rem', margin: 0 }}>
+          <p style={{
+            textAlign: 'center',
+            color: message.startsWith('Password updated') ? '#166534' : '#dc2626',
+            fontSize: '0.875rem',
+            margin: 0,
+          }}>
             {message}
           </p>
         )}
@@ -40,6 +45,12 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
         >
           Sign In
         </button>
+        <a
+          href="/login/forgot-password"
+          style={{ textAlign: 'center', fontSize: '0.8125rem', color: '#6b7280', textDecoration: 'none', marginTop: '0.25rem' }}
+        >
+          Forgot your password?
+        </a>
       </form>
     </div>
   )
