@@ -101,22 +101,25 @@ export default async function MeetingDetailPage({
 
   const { data: profile } = await supabase
     .from('users')
-    .select('id, organization_id, full_name, role')
+    .select('id, organization_id, full_name, role, is_platform_admin')
     .eq('id', user.id)
     .single()
   if (!profile) redirect('/login')
 
   const adminClient = createAdminClient()
 
-  // Load meeting
+  // Load meeting (fetch by id only, then verify org access in code)
   const { data: meeting } = await adminClient
     .from('meetings')
-    .select('id, title, meeting_type, organizer_id, attendee_id, date, purpose, notes, review_period, previous_meeting_id, external_attendees, kpi_notes, overall_rating, performance_reasons, success_failure_surprises, development_requests, goals_next_period, general_notes, project_involvement_notes, tests_experiments_notes, aob_notes')
+    .select('id, title, meeting_type, organizer_id, attendee_id, date, purpose, notes, review_period, previous_meeting_id, external_attendees, organization_id, kpi_notes, overall_rating, performance_reasons, success_failure_surprises, development_requests, goals_next_period, general_notes, project_involvement_notes, tests_experiments_notes, aob_notes')
     .eq('id', id)
-    .eq('organization_id', profile.organization_id)
     .single()
 
+  // Verify the meeting belongs to the user's org (platform admins can see any meeting)
   if (!meeting) redirect('/meetings?message=Meeting not found')
+  if (!profile.is_platform_admin && meeting.organization_id !== profile.organization_id) {
+    redirect('/meetings?message=Meeting not found')
+  }
 
   // Load org users for dropdowns
   const { data: orgUsers } = await adminClient
