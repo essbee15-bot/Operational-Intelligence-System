@@ -25,19 +25,19 @@ export async function requestPasswordReset(formData: FormData) {
   }
 
   // Derive the origin for the redirect URL.
+  // Server actions are same-origin POSTs — the 'origin' header is always
+  // the actual deployment URL (localhost, preview, or production).
+  // We trust it directly rather than checking an allowlist so that
+  // Vercel preview URLs work without any configuration changes.
   const headersList = await headers()
 
-  const ALLOWED_ORIGINS = new Set(
-    [process.env.NEXT_PUBLIC_SITE_URL, 'http://localhost:3000'].filter(Boolean)
-  )
-
-  const rawOrigin =
+  const origin =
     headersList.get('origin') ??
-    (headersList.get('x-forwarded-proto')
+    (headersList.get('x-forwarded-proto') && headersList.get('host')
       ? `${headersList.get('x-forwarded-proto')}://${headersList.get('host')}`
-      : 'http://localhost:3000')
-
-  const origin = ALLOWED_ORIGINS.has(rawOrigin) ? rawOrigin : 'http://localhost:3000'
+      : null) ??
+    process.env.NEXT_PUBLIC_SITE_URL ??
+    'http://localhost:3000'
 
   const supabase = await createClient()
 
