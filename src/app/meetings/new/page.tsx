@@ -1,6 +1,7 @@
 import { createClient } from '@/utils/supabase/server'
 import { redirect } from 'next/navigation'
 import { createMeeting } from './actions'
+import { AttendeesPicker } from '@/components/AttendeesPicker'
 
 const MEETING_TYPES = [
   {
@@ -68,6 +69,58 @@ export default async function NewMeetingPage({
     ? directReports
     : (orgUsers ?? [])
   const showingAllForOneOnOne = !directReports || directReports.length === 0
+
+  // Team meeting defaults: carry-forward from previous or first-booking smart defaults
+  const { data: prevTeamMeeting } = await supabase
+    .from('meetings')
+    .select('id')
+    .eq('organization_id', profile.organization_id)
+    .eq('meeting_type', 'team_meeting')
+    .eq('organizer_id', user.id)
+    .order('date', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  let teamDefaults: { id: string; full_name: string | null; email: string }[] = []
+
+  if (prevTeamMeeting) {
+    // Carry forward previous attendees
+    const { data: prevAttendees } = await supabase
+      .from('meeting_attendees')
+      .select('users(id, full_name, email)')
+      .eq('meeting_id', prevTeamMeeting.id)
+    teamDefaults = (prevAttendees ?? [])
+      .map(row => (row.users as unknown as { id: string; full_name: string | null; email: string } | null))
+      .filter((u): u is { id: string; full_name: string | null; email: string } => u !== null)
+  } else {
+    // First booking: direct reports + team members the user belongs to
+    const { data: myTeamMemberships } = await supabase
+      .from('team_members')
+      .select('team_id')
+      .eq('user_id', user.id)
+
+    const teamIds = (myTeamMemberships ?? []).map(m => m.team_id)
+
+    let teamMates: { id: string; full_name: string | null; email: string }[] = []
+    if (teamIds.length > 0) {
+      const { data: members } = await supabase
+        .from('team_members')
+        .select('users(id, full_name, email)')
+        .in('team_id', teamIds)
+        .neq('user_id', user.id)
+      teamMates = (members ?? [])
+        .map(row => (row.users as unknown as { id: string; full_name: string | null; email: string } | null))
+        .filter((u): u is { id: string; full_name: string | null; email: string } => u !== null)
+    }
+
+    // Merge direct reports + team mates, deduplicate by id
+    const seen = new Set<string>()
+    teamDefaults = [...(directReports ?? []), ...teamMates].filter(u => {
+      if (seen.has(u.id)) return false
+      seen.add(u.id)
+      return true
+    })
+  }
 
   const today = new Date().toISOString().split('T')[0]
 
@@ -291,21 +344,33 @@ export default async function NewMeetingPage({
               />
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem' }}>
-              <label style={{ fontSize: '0.875rem', fontWeight: 500 }}>
-                Attendees <span style={{ color: '#9ca3af', fontWeight: 400 }}>(hold Ctrl/Cmd to select multiple)</span>
-              </label>
-              <select
-                name="attendee_ids[]"
-                multiple
-                size={Math.min(8, (orgUsers ?? []).length + 1)}
-                style={{ padding: '0.5rem', border: '1px solid #d1d5db', borderRadius: '4px', fontSize: '0.875rem', backgroundColor: 'white' }}
-              >
-                {(orgUsers ?? []).map(u => (
-                  <option key={u.id} value={u.id}>{u.full_name ?? u.email}</option>
-                ))}
-              </select>
-            </div>
+            {activeType === 'team_meeting' ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem' }}>
+                <label style={{ fontSize: '0.875rem', fontWeight: 500 }}>Attendees</label>
+                {prevTeamMeeting && (
+                  <p style={{ margin: 0, fontSize: '0.8125rem', color: '#6b7280' }}>
+                    Pre-filled from your last team meeting — adjust as needed.
+                  </p>
+                )}
+                <AttendeesPicker defaultAttendees={teamDefaults} />
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem' }}>
+                <label style={{ fontSize: '0.875rem', fontWeight: 500 }}>
+                  Attendees <span style={{ color: '#9ca3af', fontWeight: 400 }}>(hold Ctrl/Cmd to select multiple)</span>
+                </label>
+                <select
+                  name="attendee_ids[]"
+                  multiple
+                  size={Math.min(8, (orgUsers ?? []).length + 1)}
+                  style={{ padding: '0.5rem', border: '1px solid #d1d5db', borderRadius: '4px', fontSize: '0.875rem', backgroundColor: 'white' }}
+                >
+                  {(orgUsers ?? []).map(u => (
+                    <option key={u.id} value={u.id}>{u.full_name ?? u.email}</option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.25rem' }}>
               <button
