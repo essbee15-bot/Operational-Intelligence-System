@@ -18,11 +18,29 @@ export function AttendeesPicker({ defaultAttendees }: AttendeesPickerProps) {
   const [results, setResults] = useState<User[]>([])
   const [loading, setLoading] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
+  const selectedRef = useRef<User[]>(selected)
+  const containerRef = useRef<HTMLDivElement>(null)
 
   // Auto-focus if no defaults
   useEffect(() => {
     if (defaultAttendees.length === 0) inputRef.current?.focus()
   }, [defaultAttendees.length])
+
+  // Keep selectedRef in sync without triggering the search effect
+  useEffect(() => {
+    selectedRef.current = selected
+  }, [selected])
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    function handleOutsideClick(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setResults([])
+      }
+    }
+    document.addEventListener('mousedown', handleOutsideClick)
+    return () => document.removeEventListener('mousedown', handleOutsideClick)
+  }, [])
 
   // Debounced search
   useEffect(() => {
@@ -31,20 +49,23 @@ export function AttendeesPicker({ defaultAttendees }: AttendeesPickerProps) {
       return
     }
     const timer = setTimeout(async () => {
-      setLoading(true)
       try {
-        const exclude = selected.map(u => u.id).join(',')
+        setLoading(true)
+        const exclude = selectedRef.current.map(u => u.id).join(',')
         const res = await fetch(
           `/api/users/search?q=${encodeURIComponent(query)}&exclude=${encodeURIComponent(exclude)}`
         )
+        if (!res.ok) { setResults([]); return }
         const data = await res.json()
         setResults((data.users ?? []).slice(0, 10))
+      } catch {
+        setResults([])
       } finally {
         setLoading(false)
       }
     }, 300)
     return () => clearTimeout(timer)
-  }, [query, selected])
+  }, [query])
 
   function addUser(u: User) {
     setSelected(prev => [...prev, u])
@@ -58,7 +79,7 @@ export function AttendeesPicker({ defaultAttendees }: AttendeesPickerProps) {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+    <div ref={containerRef} style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
       {/* Hidden inputs for server action */}
       {selected.map(u => (
         <input key={u.id} type="hidden" name="attendee_ids[]" value={u.id} />
@@ -101,6 +122,7 @@ export function AttendeesPicker({ defaultAttendees }: AttendeesPickerProps) {
           type="text"
           value={query}
           onChange={e => setQuery(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Escape') { setResults([]); setQuery('') } }}
           placeholder={selected.length === 0 ? 'Type a name to search…' : 'Add another person…'}
           style={{
             width: '100%', padding: '0.5rem', border: '1px solid #d1d5db',
