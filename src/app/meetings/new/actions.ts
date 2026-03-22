@@ -32,6 +32,8 @@ export async function createMeeting(formData: FormData) {
   // Combine date + time into a timestamp
   const dateTime = new Date(`${dateStr}T${timeStr}:00`)
 
+  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
   const adminClient = createAdminClient()
   const orgId = profile.organization_id as string
 
@@ -39,6 +41,9 @@ export async function createMeeting(formData: FormData) {
     const attendeeId = formData.get('attendee_id') as string
     if (!attendeeId) {
       redirect('/meetings/new?type=one_on_one&message=Please select an employee')
+    }
+    if (!UUID_RE.test(attendeeId)) {
+      redirect('/meetings/new?type=one_on_one&message=Invalid employee selection')
     }
 
     // Auto-detect most recent previous 1:1 between the same two people
@@ -89,6 +94,9 @@ export async function createMeeting(formData: FormData) {
     const attendeeId = formData.get('attendee_id') as string
     if (!attendeeId) {
       redirect('/meetings/new?type=performance_review&message=Please select an employee')
+    }
+    if (!UUID_RE.test(attendeeId)) {
+      redirect('/meetings/new?type=performance_review&message=Invalid employee selection')
     }
 
     const reviewPeriod = (formData.get('review_period') as string)?.trim() || null
@@ -149,22 +157,31 @@ export async function createMeeting(formData: FormData) {
       ? (formData.get('project_id') as string | null) || null
       : null
 
-    const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
     const safeProjectId = projectId && UUID_RE.test(projectId) ? projectId : null
 
-    const attendeeIds = formData.getAll('attendee_ids[]') as string[]
+    if (meetingType === 'project_meeting' && !safeProjectId) {
+      redirect('/meetings/new?type=project_meeting&message=Please select a project')
+    }
+
+    const rawAttendeeIds = formData.getAll('attendee_ids[]') as string[]
+    const attendeeIds = rawAttendeeIds.filter(id => UUID_RE.test(id))
 
     // Auto-detect most recent previous meeting of the same type with overlapping attendees
     // (same organiser, same type — best proxy for a recurring meeting series)
     let previousMeetingId: string | null = null
     if (attendeeIds.length > 0) {
       // Find most recent meeting of same type that shares attendees with this one
-      const { data: recentSameType } = await adminClient
+      // For project_meeting, scope to the same project so the chain stays per-project
+      let prevQuery = adminClient
         .from('meetings')
         .select('id')
         .eq('organization_id', orgId)
         .eq('meeting_type', meetingType)
         .eq('organizer_id', user.id)
+      if (meetingType === 'project_meeting' && safeProjectId) {
+        prevQuery = prevQuery.eq('project_id', safeProjectId)
+      }
+      const { data: recentSameType } = await prevQuery
         .order('date', { ascending: false })
         .limit(1)
         .maybeSingle()
