@@ -113,7 +113,7 @@ export default async function MeetingDetailPage({
   // because it has no session user and user_organization_id() returns NULL.
   const { data: meeting } = await supabase
     .from('meetings')
-    .select('id, title, meeting_type, organizer_id, attendee_id, date, purpose, notes, review_period, previous_meeting_id, external_attendees, organization_id, kpi_notes, overall_rating, performance_reasons, success_failure_surprises, development_requests, goals_next_period, general_notes, project_involvement_notes, tests_experiments_notes, aob_notes')
+    .select('id, title, meeting_type, organizer_id, attendee_id, date, purpose, review_period, previous_meeting_id, external_attendees, organization_id, kpi_notes, overall_rating, performance_reasons, success_failure_surprises, development_requests, goals_next_period, general_notes, project_involvement_notes, tests_experiments_notes, aob_notes')
     .eq('id', id)
     .single()
 
