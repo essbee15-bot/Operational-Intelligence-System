@@ -278,6 +278,20 @@ export default async function NewMeetingPage({
               </select>
             </div>
 
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem' }}>
+              <label htmlFor="external_attendees_1on1" style={{ fontSize: '0.875rem', fontWeight: 500 }}>
+                External attendees <span style={{ color: '#9ca3af', fontWeight: 400 }}>(optional)</span>
+              </label>
+              <input
+                id="external_attendees_1on1"
+                name="external_attendees"
+                type="text"
+                maxLength={500}
+                placeholder="e.g. John Smith, Sarah Jones"
+                style={{ padding: '0.5rem', border: '1px solid #d1d5db', borderRadius: '4px', fontSize: '0.875rem' }}
+              />
+            </div>
+
             <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.25rem' }}>
               <button
                 formAction={createMeeting}
@@ -340,6 +354,20 @@ export default async function NewMeetingPage({
                   <option key={u.id} value={u.id}>{u.full_name ?? u.email}</option>
                 ))}
               </select>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem' }}>
+              <label htmlFor="external_attendees_review" style={{ fontSize: '0.875rem', fontWeight: 500 }}>
+                External attendees <span style={{ color: '#9ca3af', fontWeight: 400 }}>(optional)</span>
+              </label>
+              <input
+                id="external_attendees_review"
+                name="external_attendees"
+                type="text"
+                maxLength={500}
+                placeholder="e.g. John Smith, Sarah Jones"
+                style={{ padding: '0.5rem', border: '1px solid #d1d5db', borderRadius: '4px', fontSize: '0.875rem' }}
+              />
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem' }}>
@@ -418,6 +446,20 @@ export default async function NewMeetingPage({
               <AttendeesPicker defaultAttendees={teamDefaults} />
             </div>
 
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem' }}>
+              <label htmlFor="external_attendees_team" style={{ fontSize: '0.875rem', fontWeight: 500 }}>
+                External attendees <span style={{ color: '#9ca3af', fontWeight: 400 }}>(optional)</span>
+              </label>
+              <input
+                id="external_attendees_team"
+                name="external_attendees"
+                type="text"
+                maxLength={500}
+                placeholder="e.g. John Smith, Sarah Jones"
+                style={{ padding: '0.5rem', border: '1px solid #d1d5db', borderRadius: '4px', fontSize: '0.875rem' }}
+              />
+            </div>
+
             <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.25rem' }}>
               <button
                 formAction={createMeeting}
@@ -477,6 +519,20 @@ export default async function NewMeetingPage({
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem' }}>
                   <label style={{ fontSize: '0.875rem', fontWeight: 500 }}>Attendees</label>
                   <AttendeesPicker defaultAttendees={projectDefaults} />
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem' }}>
+                  <label htmlFor="external_attendees_project" style={{ fontSize: '0.875rem', fontWeight: 500 }}>
+                    External attendees <span style={{ color: '#9ca3af', fontWeight: 400 }}>(optional)</span>
+                  </label>
+                  <input
+                    id="external_attendees_project"
+                    name="external_attendees"
+                    type="text"
+                    maxLength={500}
+                    placeholder="e.g. John Smith, Sarah Jones"
+                    style={{ padding: '0.5rem', border: '1px solid #d1d5db', borderRadius: '4px', fontSize: '0.875rem' }}
+                  />
                 </div>
 
                 <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.25rem' }}>
