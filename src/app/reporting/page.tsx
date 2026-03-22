@@ -1,6 +1,7 @@
 import { createClient } from '@/utils/supabase/server'
 import { createAdminClient } from '@/utils/supabase/admin'
 import { redirect } from 'next/navigation'
+import PageShell from '@/components/PageShell'
 
 const ROLE_COLORS: Record<string, { bg: string; color: string }> = {
   admin:       { bg: '#fef2f2', color: '#991b1b' },
@@ -21,6 +22,37 @@ interface TreeNode {
   depth: number
   isLast: boolean
   parentPrefix: string
+}
+
+/**
+ * For non-admins: return only the IDs this user should see —
+ * their full ancestor chain (up to root) + themselves + all their descendants.
+ * Everything else (siblings of ancestors, parallel branches) is hidden.
+ */
+function getRelevantIds(userId: string, allUsers: OrgUser[]): Set<string> {
+  const byId = new Map(allUsers.map(u => [u.id, u]))
+  const relevant = new Set<string>()
+
+  // Walk UP: ancestor chain
+  let cur: OrgUser | undefined = byId.get(userId)
+  while (cur) {
+    relevant.add(cur.id)
+    cur = cur.manager_id ? byId.get(cur.manager_id) : undefined
+  }
+
+  // Walk DOWN: all descendants (BFS)
+  const queue = [userId]
+  while (queue.length > 0) {
+    const pid = queue.shift()!
+    for (const u of allUsers) {
+      if (u.manager_id === pid && !relevant.has(u.id)) {
+        relevant.add(u.id)
+        queue.push(u.id)
+      }
+    }
+  }
+
+  return relevant
 }
 
 function buildTree(users: OrgUser[]): TreeNode[] {
@@ -61,9 +93,9 @@ function buildTree(users: OrgUser[]): TreeNode[] {
 export default async function ReportingPage({
   searchParams,
 }: {
-  searchParams: Promise<{ search?: string }>
+  searchParams: Promise<{ search?: string; from?: string }>
 }) {
-  const { search } = await searchParams
+  const { search, from } = await searchParams
 
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -96,11 +128,17 @@ export default async function ReportingPage({
     manager_id: u.manager_id as string | null,
   }))
 
-  // Counts
+  // Counts (always across the whole org for the subtitle)
   const roleCount: Record<string, number> = {}
   for (const u of allUsers) { roleCount[u.role] = (roleCount[u.role] ?? 0) + 1 }
 
-  const tree = buildTree(allUsers)
+  // Non-admins only see their own reporting line:
+  //   their ancestor chain up to the org root + themselves + all their reports
+  const visibleUsers = isAdmin
+    ? allUsers
+    : allUsers.filter(u => getRelevantIds(user.id, allUsers).has(u.id))
+
+  const tree = buildTree(visibleUsers)
 
   // Filter for search
   const q = search?.trim().toLowerCase() ?? ''
@@ -113,29 +151,24 @@ export default async function ReportingPage({
     : tree
 
   return (
-    <div style={{ maxWidth: '860px', margin: '2rem auto', padding: '0 1rem', fontFamily: 'system-ui, sans-serif' }}>
-      <div style={{ marginBottom: '0.5rem' }}>
-        <a href="/" style={{ fontSize: '0.875rem', color: '#6b7280', textDecoration: 'none' }}>← Dashboard</a>
-      </div>
-
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+    <PageShell>
+    <div className="page-content">
+      {from === 'team' && (
+        <div style={{ marginBottom: '0.75rem' }}>
+          <a href="/?tab=team" style={{ fontSize: '0.875rem', color: '#6b7280', textDecoration: 'none' }}>← Back to My Team</a>
+        </div>
+      )}
+      <div className="page-header">
         <div>
-          <h1 style={{ margin: 0, fontSize: '1.5rem' }}>Reporting Lines</h1>
-          <p style={{ color: '#6b7280', margin: '0.25rem 0 0 0', fontSize: '0.875rem' }}>
-            {allUsers.length} people ·{' '}
-            {(roleCount['admin'] ?? 0)} admin{(roleCount['admin'] ?? 0) !== 1 ? 's' : ''} ·{' '}
-            {(roleCount['manager'] ?? 0)} manager{(roleCount['manager'] ?? 0) !== 1 ? 's' : ''} ·{' '}
-            {(roleCount['contributor'] ?? 0)} contributor{(roleCount['contributor'] ?? 0) !== 1 ? 's' : ''}
+          <h1 className="page-title">Reporting Lines</h1>
+          <p className="page-subtitle">
+            {isAdmin
+              ? `${allUsers.length} people · ${roleCount['admin'] ?? 0} admin${(roleCount['admin'] ?? 0) !== 1 ? 's' : ''} · ${roleCount['manager'] ?? 0} manager${(roleCount['manager'] ?? 0) !== 1 ? 's' : ''} · ${roleCount['contributor'] ?? 0} contributor${(roleCount['contributor'] ?? 0) !== 1 ? 's' : ''}`
+              : `Your reporting line — ${visibleUsers.length} ${visibleUsers.length === 1 ? 'person' : 'people'}`
+            }
           </p>
         </div>
-        {isAdmin && (
-          <a
-            href="/admin/users"
-            style={{ padding: '0.5rem 1rem', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '0.875rem', textDecoration: 'none', color: '#374151' }}
-          >
-            Manage Users →
-          </a>
-        )}
+        {isAdmin && <a href="/admin/users" className="btn btn-secondary">Manage Users →</a>}
       </div>
 
       {/* Search */}
@@ -157,7 +190,7 @@ export default async function ReportingPage({
           </span>
         ))}
         <span style={{ fontSize: '0.75rem', color: '#9ca3af', alignSelf: 'center' }}>
-          · Indentation shows reporting hierarchy
+          · {isAdmin ? 'Indentation shows reporting hierarchy' : 'Showing your line — your managers above, your reports below'}
         </span>
       </div>
 
@@ -245,9 +278,10 @@ export default async function ReportingPage({
 
       {q && (
         <div style={{ marginTop: '0.75rem', textAlign: 'center' }}>
-          <a href="/reporting" style={{ fontSize: '0.8125rem', color: '#2563eb', textDecoration: 'none' }}>Clear search</a>
+          <a href="/reporting" className="link">Clear search</a>
         </div>
       )}
     </div>
+    </PageShell>
   )
 }

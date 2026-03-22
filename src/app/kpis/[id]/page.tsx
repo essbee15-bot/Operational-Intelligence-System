@@ -1,6 +1,7 @@
 import { createClient } from '@/utils/supabase/server'
 import { createAdminClient } from '@/utils/supabase/admin'
 import { redirect } from 'next/navigation'
+import PageShell from '@/components/PageShell'
 import { recordKpiValue, deleteKpiRecord } from './actions'
 
 const CATEGORIES: Record<string, { label: string; bg: string; color: string }> = {
@@ -113,7 +114,8 @@ export default async function KpiDetailPage({
   const isSuccess = message === 'Reading recorded' || message === 'Reading removed'
 
   return (
-    <div style={{ maxWidth: '900px', margin: '2rem auto', padding: '0 1rem', fontFamily: 'system-ui, sans-serif' }}>
+    <PageShell>
+    <div className="page-content" style={{ maxWidth: '900px', fontFamily: 'system-ui, sans-serif' }}>
       {/* Back link */}
       <div style={{ marginBottom: '0.5rem' }}>
         <a href="/kpis" style={{ fontSize: '0.875rem', color: '#6b7280', textDecoration: 'none' }}>← KPIs</a>
@@ -183,6 +185,54 @@ export default async function KpiDetailPage({
           </div>
         )}
       </div>
+
+      {/* ── Trend chart ───────────────────────────────────────────────────── */}
+      {records && records.length > 1 && (() => {
+        const chronological = [...records].reverse()
+        const vals = chronological.map(r => r.value as number)
+        const target = kpi.target_value as number | null
+        const minV = Math.min(...vals, ...(target != null ? [target] : []))
+        const maxV = Math.max(...vals, ...(target != null ? [target] : []))
+        const range = maxV - minV || 1
+        const W = 540, H = 90, PAD = 8
+        const toX = (i: number) => PAD + (i / (vals.length - 1)) * W
+        const toY = (v: number) => PAD + H - ((v - minV) / range) * H
+        const polyPoints = vals.map((v, i) => `${toX(i).toFixed(1)},${toY(v).toFixed(1)}`).join(' ')
+        const targetY = target != null ? toY(target).toFixed(1) : null
+        const lastVal = vals[vals.length - 1]!
+        const prevVal = vals[vals.length - 2]!
+        const trendStroke = lastVal > prevVal ? '#16a34a' : lastVal < prevVal ? '#dc2626' : '#6b7280'
+        return (
+          <div style={{ backgroundColor: 'white', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '1.25rem', marginBottom: '1.25rem' }}>
+            <h2 style={{ margin: '0 0 0.75rem 0', fontSize: '1rem', fontWeight: 600 }}>Trend</h2>
+            <svg viewBox={`0 0 ${W + PAD * 2} ${H + PAD * 2}`} style={{ width: '100%', height: '110px', overflow: 'visible' }} preserveAspectRatio="none">
+              {/* Target line */}
+              {targetY && (
+                <>
+                  <line x1={PAD} y1={targetY} x2={W + PAD} y2={targetY} stroke="#86efac" strokeWidth="1.5" strokeDasharray="5 4" />
+                  <text x={W + PAD + 3} y={parseFloat(targetY) + 4} fontSize="9" fill="#16a34a" style={{ fontFamily: 'system-ui' }}>target</text>
+                </>
+              )}
+              {/* Value line */}
+              <polyline points={polyPoints} fill="none" stroke={trendStroke} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+              {/* Data points */}
+              {vals.map((v, i) => {
+                const isLast = i === vals.length - 1
+                return (
+                  <circle key={i} cx={toX(i).toFixed(1)} cy={toY(v).toFixed(1)}
+                    r={isLast ? '4.5' : '3'}
+                    fill={isLast ? trendStroke : 'white'}
+                    stroke={trendStroke} strokeWidth="2" />
+                )
+              })}
+            </svg>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: '#9ca3af', marginTop: '0.375rem' }}>
+              <span>{new Date(chronological[0]!.date as string).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+              <span>{new Date(records[0]!.date as string).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+            </div>
+          </div>
+        )
+      })()}
 
       {/* ── Record new value (managers/admins only) ────────────────────────── */}
       {isManager && (
@@ -320,5 +370,6 @@ export default async function KpiDetailPage({
         </p>
       )}
     </div>
+    </PageShell>
   )
 }

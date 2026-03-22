@@ -1,3 +1,4 @@
+import PageShell from '@/components/PageShell'
 import { createClient } from '@/utils/supabase/server'
 import { createAdminClient } from '@/utils/supabase/admin'
 import { redirect } from 'next/navigation'
@@ -187,26 +188,14 @@ export default async function ProjectsPage({
   const isSuccess = message?.toLowerCase().includes('created') || message?.toLowerCase().includes('saved')
 
   return (
-    <div style={{ maxWidth: '900px', margin: '2rem auto', padding: '0 1rem', fontFamily: 'system-ui, sans-serif' }}>
-      {/* Header */}
-      <div style={{ marginBottom: '0.5rem' }}>
-        <a href="/" style={{ fontSize: '0.875rem', color: '#6b7280', textDecoration: 'none' }}>← Dashboard</a>
-      </div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+    <PageShell>
+    <div className="page-content">
+      <div className="page-header">
         <div>
-          <h1 style={{ margin: 0, fontSize: '1.5rem' }}>Projects</h1>
-          <p style={{ color: '#6b7280', margin: '0.25rem 0 0 0', fontSize: '0.875rem' }}>
-            Track active projects, outcomes, and capacity impact.
-          </p>
+          <h1 className="page-title">Projects</h1>
+          <p className="page-subtitle">Track active projects, outcomes, and capacity impact.</p>
         </div>
-        {isManager && (
-          <a
-            href="/projects/new"
-            style={{ padding: '0.5rem 1rem', backgroundColor: '#111827', color: 'white', borderRadius: '6px', textDecoration: 'none', fontSize: '0.875rem', fontWeight: 500 }}
-          >
-            + New Project
-          </a>
-        )}
+        {isManager && <a href="/projects/new" className="btn btn-primary">+ New Project</a>}
       </div>
 
       {message && (
@@ -318,5 +307,6 @@ export default async function ProjectsPage({
         </div>
       )}
     </div>
+    </PageShell>
   )
 }

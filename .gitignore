@@ -44,3 +44,5 @@ next-env.d.ts
 status.txt
 temp_out.txt
 scripts/
+
+.vercel

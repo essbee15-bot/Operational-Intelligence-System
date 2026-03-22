@@ -1,3 +1,4 @@
+import PageShell from '@/components/PageShell'
 import { createClient } from '@/utils/supabase/server'
 import { createAdminClient } from '@/utils/supabase/admin'
 import { redirect } from 'next/navigation'
@@ -12,9 +13,10 @@ const OBJ_STATUS: Record<string, { label: string; bg: string; color: string }> =
 export default async function GoalsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ message?: string }>
+  searchParams: Promise<{ message?: string; create?: string }>
 }) {
-  const { message } = await searchParams
+  const { message, create } = await searchParams
+  const showCreateForm = create === '1'
 
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -96,16 +98,19 @@ export default async function GoalsPage({
   const isSuccess = ['created', 'deleted', 'updated'].some(w => message?.includes(w))
 
   return (
-    <div style={{ maxWidth: '1000px', margin: '2rem auto', padding: '0 1rem', fontFamily: 'system-ui, sans-serif' }}>
-      <div style={{ marginBottom: '0.5rem' }}>
-        <a href="/" style={{ fontSize: '0.875rem', color: '#6b7280', textDecoration: 'none' }}>← Dashboard</a>
-      </div>
-
-      <div style={{ marginBottom: '1.5rem' }}>
-        <h1 style={{ margin: '0 0 0.25rem 0', fontSize: '1.5rem', color: '#111827' }}>Goals & OKRs</h1>
-        <p style={{ margin: 0, color: '#6b7280', fontSize: '0.875rem' }}>
-          Track objectives and key results aligned to your organisation's KPIs.
-        </p>
+    <PageShell>
+    <div className="page-content">
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">Goals &amp; OKRs</h1>
+          <p className="page-subtitle">Track objectives and key results aligned to your organisation&apos;s KPIs.</p>
+        </div>
+        {isManager && !showCreateForm && (
+          <a href="/goals?create=1" className="btn btn-primary">+ New Objective</a>
+        )}
+        {isManager && showCreateForm && (
+          <a href="/goals" className="btn btn-secondary">Cancel</a>
+        )}
       </div>
 
       {message && (
@@ -119,8 +124,8 @@ export default async function GoalsPage({
         </div>
       )}
 
-      {/* ── Create Objective form (managers/admins) ────────────────────────── */}
-      {isManager && (
+      {/* ── Create Objective form (managers/admins — shown when ?create=1) ── */}
+      {isManager && showCreateForm && (
         <div style={{ backgroundColor: 'white', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '1.25rem', marginBottom: '1.5rem' }}>
           <h2 style={{ margin: '0 0 0.875rem 0', fontSize: '0.9375rem', fontWeight: 600 }}>
             New Objective
@@ -200,7 +205,7 @@ export default async function GoalsPage({
         <div style={{ backgroundColor: 'white', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '2.5rem', textAlign: 'center' }}>
           <p style={{ margin: '0 0 0.5rem 0', color: '#374151', fontWeight: 500 }}>No objectives yet</p>
           <p style={{ margin: 0, color: '#9ca3af', fontSize: '0.875rem' }}>
-            {isManager ? 'Create your first objective above.' : 'Your organisation hasn\'t set any objectives yet.'}
+            {isManager ? 'Use the + New Objective button to get started.' : 'Your organisation hasn\'t set any objectives yet.'}
           </p>
         </div>
       ) : (
@@ -289,5 +294,6 @@ export default async function GoalsPage({
         })
       )}
     </div>
+    </PageShell>
   )
 }

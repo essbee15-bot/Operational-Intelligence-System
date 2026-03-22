@@ -2,6 +2,7 @@ import { createClient } from '@/utils/supabase/server'
 import { createAdminClient } from '@/utils/supabase/admin'
 import { redirect } from 'next/navigation'
 import { saveAiSettings } from './actions'
+import PageShell from '@/components/PageShell'
 
 export default async function AdminAiPage({
   searchParams,
@@ -51,14 +52,15 @@ export default async function AdminAiPage({
   const hasKey    = !!(settings?.api_key as string | null)
 
   return (
-    <div style={{ maxWidth: '640px', margin: '2rem auto', padding: '0 1rem', fontFamily: 'system-ui, sans-serif' }}>
-      <div style={{ marginBottom: '0.5rem' }}>
-        <a href="/" style={{ fontSize: '0.875rem', color: '#6b7280', textDecoration: 'none' }}>← Dashboard</a>
+    <PageShell>
+    <div className="page-content" style={{ maxWidth: '680px' }}>
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">AI Assistant</h1>
+          <p className="page-subtitle">Configure the AI co-pilot for your organisation.</p>
+        </div>
+        <a href="/admin" className="btn btn-secondary">← Admin</a>
       </div>
-      <h1 style={{ margin: '0 0 0.25rem 0', fontSize: '1.5rem' }}>AI Assistant</h1>
-      <p style={{ color: '#6b7280', margin: '0 0 1.5rem 0', fontSize: '0.875rem' }}>
-        Configure the AI co-pilot that lets your team query organisational memory — past projects, meetings, outcomes, and patterns.
-      </p>
 
       {message && (
         <div style={{ padding: '0.75rem 1rem', borderRadius: '6px', marginBottom: '1.25rem', backgroundColor: isError ? '#fef2f2' : '#f0fdf4', border: `1px solid ${isError ? '#fca5a5' : '#86efac'}`, color: isError ? '#991b1b' : '#166534', fontSize: '0.875rem' }}>
@@ -178,6 +180,7 @@ export default async function AdminAiPage({
         <strong style={{ color: '#374151' }}>Privacy:</strong> The AI only searches data from your organisation. Conversations are session-only and never stored. Your API key is only used when a user sends a message.
       </div>
     </div>
+    </PageShell>
   )
 }
 

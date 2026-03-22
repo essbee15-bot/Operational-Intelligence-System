@@ -1,5 +1,6 @@
 import { createClient } from '@/utils/supabase/server'
 import { redirect } from 'next/navigation'
+import PageShell from '@/components/PageShell'
 
 const TYPE_LABELS: Record<string, string> = {
   one_on_one:         '1:1',
@@ -88,21 +89,14 @@ export default async function MeetingsPage({
   ]
 
   return (
-    <div style={{ maxWidth: '900px', margin: '2rem auto', padding: '0 1rem', fontFamily: 'system-ui, sans-serif' }}>
-      <div style={{ marginBottom: '0.5rem' }}>
-        <a href="/" style={{ fontSize: '0.875rem', color: '#6b7280', textDecoration: 'none' }}>← Dashboard</a>
-      </div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.5rem' }}>
+    <PageShell>
+    <div className="page-content">
+      <div className="page-header">
         <div>
-          <h1 style={{ margin: 0, fontSize: '1.5rem' }}>My Meetings</h1>
-          <p style={{ color: '#6b7280', margin: '0.25rem 0 0 0', fontSize: '0.875rem' }}>Meetings you organise or attend.</p>
+          <h1 className="page-title">My Meetings</h1>
+          <p className="page-subtitle">Meetings you organise or attend.</p>
         </div>
-        <a
-          href="/meetings/new"
-          style={{ padding: '0.625rem 1.25rem', backgroundColor: '#111827', color: 'white', borderRadius: '6px', textDecoration: 'none', fontSize: '0.875rem', whiteSpace: 'nowrap' }}
-        >
-          + New Meeting
-        </a>
+        <a href="/meetings/new" className="btn btn-primary">+ New Meeting</a>
       </div>
 
       {message && (
@@ -117,20 +111,12 @@ export default async function MeetingsPage({
       )}
 
       {/* Tabs */}
-      <div style={{ display: 'flex', gap: '0.25rem', marginBottom: '1.5rem', borderBottom: '1px solid #e5e7eb' }}>
+      <div className="tab-nav">
         {tabs.map(tab => (
           <a
             key={tab.key}
             href={tab.key ? `/meetings?type=${tab.key}` : '/meetings'}
-            style={{
-              padding: '0.5rem 1rem',
-              fontSize: '0.875rem',
-              textDecoration: 'none',
-              borderBottom: (typeFilter ?? '') === tab.key ? '2px solid #111827' : '2px solid transparent',
-              color: (typeFilter ?? '') === tab.key ? '#111827' : '#6b7280',
-              fontWeight: (typeFilter ?? '') === tab.key ? 600 : 400,
-              marginBottom: '-1px',
-            }}
+            className={`tab-item${(typeFilter ?? '') === tab.key ? ' active' : ''}`}
           >
             {tab.label}
           </a>
@@ -138,12 +124,14 @@ export default async function MeetingsPage({
       </div>
 
       {/* Meetings list */}
-      <div style={{ backgroundColor: 'white', border: '1px solid #e5e7eb', borderRadius: '8px' }}>
+      <div className="card">
         {meetings.length === 0 ? (
-          <div style={{ padding: '2rem', textAlign: 'center' }}>
-            <p style={{ color: '#6b7280', fontSize: '0.875rem', margin: 0 }}>
-              No meetings found.{' '}
-              <a href="/meetings/new" style={{ color: '#2563eb', textDecoration: 'none' }}>Create your first meeting →</a>
+          <div style={{ padding: '2.5rem', textAlign: 'center' }}>
+            <p style={{ color: '#374151', fontSize: '0.875rem', margin: '0 0 0.375rem 0', fontWeight: 500 }}>
+              {typeFilter ? `No ${TYPE_LABELS[typeFilter] ?? typeFilter} meetings yet` : 'No meetings yet'}
+            </p>
+            <p style={{ color: '#9ca3af', fontSize: '0.8125rem', margin: 0 }}>
+              <a href="/meetings/new" style={{ color: '#0ea5e9', textDecoration: 'none', fontWeight: 500 }}>Schedule a new meeting →</a>
             </p>
           </div>
         ) : (
@@ -199,5 +187,6 @@ export default async function MeetingsPage({
         )}
       </div>
     </div>
+    </PageShell>
   )
 }

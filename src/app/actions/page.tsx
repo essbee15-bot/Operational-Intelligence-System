@@ -1,13 +1,14 @@
 import { createClient } from '@/utils/supabase/server'
 import { createAdminClient } from '@/utils/supabase/admin'
 import { redirect } from 'next/navigation'
+import PageShell from '@/components/PageShell'
 
 export default async function MyActionsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ filter?: string; message?: string }>
+  searchParams: Promise<{ filter?: string; message?: string; viewing?: string; from?: string }>
 }) {
-  const { filter, message } = await searchParams
+  const { filter, message, viewing, from } = await searchParams
 
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -15,7 +16,7 @@ export default async function MyActionsPage({
 
   const { data: profile } = await supabase
     .from('users')
-    .select('id, organization_id, is_platform_admin')
+    .select('id, organization_id, role, is_platform_admin')
     .eq('id', user.id)
     .single()
   if (!profile) redirect('/login')
@@ -24,13 +25,31 @@ export default async function MyActionsPage({
   if (profile.is_platform_admin) redirect('/platform-admin/meetings')
 
   const adminClient = createAdminClient()
+  const isManager = profile.role === 'admin' || profile.role === 'manager'
 
-  // Load all actions assigned to this user
+  // If ?viewing=userId is passed by a manager, show that person's actions instead
+  let viewingUserId = user.id
+  let viewingName: string | null = null
+  if (viewing && isManager) {
+    // Verify the viewed user is a direct report or in the same org
+    const { data: viewedUser } = await adminClient
+      .from('users')
+      .select('id, full_name, email')
+      .eq('id', viewing)
+      .eq('organization_id', profile.organization_id)
+      .single()
+    if (viewedUser) {
+      viewingUserId = viewedUser.id as string
+      viewingName = (viewedUser.full_name ?? viewedUser.email) as string
+    }
+  }
+
+  // Load actions for the target user
   let query = adminClient
     .from('action_items')
     .select('*, meetings(id, meeting_type, title, purpose, date)')
     .eq('organization_id', profile.organization_id)
-    .eq('assignee_id', user.id)
+    .eq('assignee_id', viewingUserId)
     .order('due_date', { ascending: true, nullsFirst: false })
 
   if (filter === 'open') {
@@ -56,6 +75,10 @@ export default async function MyActionsPage({
   const openCount = (actions ?? []).filter(a => !a.is_closed).length
   const closedCount = (actions ?? []).filter(a => a.is_closed).length
 
+  // Build tab URLs preserving viewing + from params
+  const baseParams = viewing ? `&viewing=${viewing}` : ''
+  const fromParam = from ? `&from=${from}` : ''
+
   const tabs = [
     { key: '', label: `All (${(actions ?? []).length})` },
     { key: 'open', label: `Open (${openCount})` },
@@ -63,14 +86,25 @@ export default async function MyActionsPage({
   ]
 
   return (
-    <div style={{ maxWidth: '900px', margin: '2rem auto', padding: '0 1rem', fontFamily: 'system-ui, sans-serif' }}>
-      <div style={{ marginBottom: '0.5rem' }}>
-        <a href="/" style={{ fontSize: '0.875rem', color: '#6b7280', textDecoration: 'none' }}>← Dashboard</a>
+    <PageShell>
+    <div className="page-content">
+      {/* Back navigation if coming from My Team tab */}
+      {from === 'team' && (
+        <div style={{ marginBottom: '0.75rem' }}>
+          <a href="/?tab=team" style={{ fontSize: '0.875rem', color: '#6b7280', textDecoration: 'none' }}>← Back to My Team</a>
+        </div>
+      )}
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">{viewingName ? `${viewingName}'s Actions` : 'My Actions'}</h1>
+          <p className="page-subtitle">
+            {viewingName
+              ? `Open actions assigned to ${viewingName}.`
+              : 'All actions assigned to you across your meetings.'
+            }
+          </p>
+        </div>
       </div>
-      <h1 style={{ margin: '0 0 0.25rem 0', fontSize: '1.5rem' }}>My Actions</h1>
-      <p style={{ color: '#6b7280', margin: '0 0 1.5rem 0', fontSize: '0.875rem' }}>
-        All actions assigned to you across your meetings.
-      </p>
 
       {message && (
         <div style={{
@@ -84,20 +118,12 @@ export default async function MyActionsPage({
       )}
 
       {/* Tabs */}
-      <div style={{ display: 'flex', gap: '0.25rem', marginBottom: '1.5rem', borderBottom: '1px solid #e5e7eb' }}>
+      <div className="tab-nav">
         {tabs.map(tab => (
           <a
             key={tab.key}
-            href={tab.key ? `/actions?filter=${tab.key}` : '/actions'}
-            style={{
-              padding: '0.5rem 1rem',
-              fontSize: '0.875rem',
-              textDecoration: 'none',
-              borderBottom: (filter ?? '') === tab.key ? '2px solid #111827' : '2px solid transparent',
-              color: (filter ?? '') === tab.key ? '#111827' : '#6b7280',
-              fontWeight: (filter ?? '') === tab.key ? 600 : 400,
-              marginBottom: '-1px',
-            }}
+            href={tab.key ? `/actions?filter=${tab.key}${baseParams}${fromParam}` : `/actions?${baseParams.slice(1)}${fromParam}`}
+            className={`tab-item${(filter ?? '') === tab.key ? ' active' : ''}`}
           >
             {tab.label}
           </a>
@@ -105,7 +131,7 @@ export default async function MyActionsPage({
       </div>
 
       {/* Actions list */}
-      <div style={{ backgroundColor: 'white', border: '1px solid #e5e7eb', borderRadius: '8px' }}>
+      <div className="card">
         {(actions ?? []).length === 0 ? (
           <div style={{ padding: '2rem', textAlign: 'center' }}>
             <p style={{ color: '#6b7280', fontSize: '0.875rem', margin: 0 }}>No actions found.</p>
@@ -180,5 +206,6 @@ export default async function MyActionsPage({
         )}
       </div>
     </div>
+    </PageShell>
   )
 }

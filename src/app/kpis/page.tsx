@@ -1,6 +1,7 @@
 import { createClient } from '@/utils/supabase/server'
 import { createAdminClient } from '@/utils/supabase/admin'
 import { redirect } from 'next/navigation'
+import PageShell from '@/components/PageShell'
 
 const CATEGORIES = [
   { key: 'sales',      label: 'Sales & Revenue',       bg: '#eff6ff', color: '#1d4ed8' },
@@ -99,27 +100,16 @@ export default async function KpisPage({
   const totalKpis = kpiWithRecords.length
 
   return (
-    <div style={{ maxWidth: '1000px', margin: '2rem auto', padding: '0 1rem', fontFamily: 'system-ui, sans-serif' }}>
-      {/* Back */}
-      <div style={{ marginBottom: '0.5rem' }}>
-        <a href="/" style={{ fontSize: '0.875rem', color: '#6b7280', textDecoration: 'none' }}>← Dashboard</a>
-      </div>
-
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem', marginBottom: '1.5rem' }}>
+    <PageShell>
+    <div className="page-content">
+      <div className="page-header">
         <div>
-          <h1 style={{ margin: '0 0 0.25rem 0', fontSize: '1.5rem', color: '#111827' }}>KPIs</h1>
-          <p style={{ margin: 0, color: '#6b7280', fontSize: '0.875rem' }}>
-            {isManager
-              ? 'All active KPIs for your organisation. Record values and track trends.'
-              : 'All active KPIs for your organisation.'}
+          <h1 className="page-title">KPIs</h1>
+          <p className="page-subtitle">
+            {isManager ? 'All active KPIs for your organisation. Record values and track trends.' : 'All active KPIs for your organisation.'}
           </p>
         </div>
-        {isManager && (
-          <a href="/admin/kpis" style={{ fontSize: '0.8125rem', color: '#2563eb', textDecoration: 'none', padding: '0.375rem 0.875rem', border: '1px solid #bfdbfe', borderRadius: '6px', whiteSpace: 'nowrap' }}>
-            Manage KPIs →
-          </a>
-        )}
+        {isManager && <a href="/admin/kpis" className="btn btn-secondary">Manage KPIs →</a>}
       </div>
 
       {/* Message banner */}
@@ -245,5 +235,6 @@ export default async function KpisPage({
         })
       )}
     </div>
+    </PageShell>
   )
 }
