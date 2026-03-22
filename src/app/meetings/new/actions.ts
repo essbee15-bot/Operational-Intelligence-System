@@ -20,7 +20,6 @@ export async function createMeeting(formData: FormData) {
   const meetingType = formData.get('meeting_type') as string
   const dateStr = formData.get('date') as string
   const timeStr = (formData.get('time') as string) ?? '09:00'
-  const previousMeetingId = (formData.get('previous_meeting_id') as string) || null
 
   const validTypes = ['one_on_one', 'team_meeting', 'project_meeting', 'performance_review']
   if (!validTypes.includes(meetingType)) {
@@ -34,12 +33,27 @@ export async function createMeeting(formData: FormData) {
   const dateTime = new Date(`${dateStr}T${timeStr}:00`)
 
   const adminClient = createAdminClient()
+  const orgId = profile.organization_id as string
 
   if (meetingType === 'one_on_one') {
     const attendeeId = formData.get('attendee_id') as string
     if (!attendeeId) {
       redirect('/meetings/new?type=one_on_one&message=Please select an employee')
     }
+
+    // Auto-detect most recent previous 1:1 between the same two people
+    // (regardless of who organised it)
+    const { data: prevMeeting } = await adminClient
+      .from('meetings')
+      .select('id')
+      .eq('organization_id', orgId)
+      .eq('meeting_type', 'one_on_one')
+      .or(`and(organizer_id.eq.${user.id},attendee_id.eq.${attendeeId}),and(organizer_id.eq.${attendeeId},attendee_id.eq.${user.id})`)
+      .order('date', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    const previousMeetingId = prevMeeting?.id ?? null
 
     // Auto-generate title
     const { data: attendee } = await adminClient
@@ -54,7 +68,7 @@ export async function createMeeting(formData: FormData) {
     const { data: meeting, error } = await adminClient
       .from('meetings')
       .insert({
-        organization_id: profile.organization_id,
+        organization_id: orgId,
         meeting_type: 'one_on_one',
         title,
         organizer_id: user.id,
@@ -79,6 +93,19 @@ export async function createMeeting(formData: FormData) {
 
     const reviewPeriod = (formData.get('review_period') as string)?.trim() || null
 
+    // Auto-detect most recent previous review for this employee
+    const { data: prevReview } = await adminClient
+      .from('meetings')
+      .select('id')
+      .eq('organization_id', orgId)
+      .eq('meeting_type', 'performance_review')
+      .eq('attendee_id', attendeeId)
+      .order('date', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    const previousMeetingId = prevReview?.id ?? null
+
     // Auto-generate title
     const { data: attendee } = await adminClient
       .from('users')
@@ -93,7 +120,7 @@ export async function createMeeting(formData: FormData) {
     const { data: meeting, error } = await adminClient
       .from('meetings')
       .insert({
-        organization_id: profile.organization_id,
+        organization_id: orgId,
         meeting_type: 'performance_review',
         title,
         organizer_id: user.id,
@@ -118,17 +145,44 @@ export async function createMeeting(formData: FormData) {
       redirect(`/meetings/new?type=${meetingType}&message=Purpose is required`)
     }
 
+    const projectId = meetingType === 'project_meeting'
+      ? (formData.get('project_id') as string | null) || null
+      : null
+
+    const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    const safeProjectId = projectId && UUID_RE.test(projectId) ? projectId : null
+
+    const attendeeIds = formData.getAll('attendee_ids[]') as string[]
+
+    // Auto-detect most recent previous meeting of the same type with overlapping attendees
+    // (same organiser, same type — best proxy for a recurring meeting series)
+    let previousMeetingId: string | null = null
+    if (attendeeIds.length > 0) {
+      // Find most recent meeting of same type that shares attendees with this one
+      const { data: recentSameType } = await adminClient
+        .from('meetings')
+        .select('id')
+        .eq('organization_id', orgId)
+        .eq('meeting_type', meetingType)
+        .eq('organizer_id', user.id)
+        .order('date', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      previousMeetingId = recentSameType?.id ?? null
+    }
+
     const title = purpose
     const { data: meeting, error } = await adminClient
       .from('meetings')
       .insert({
-        organization_id: profile.organization_id,
+        organization_id: orgId,
         meeting_type: meetingType,
         title,
         purpose,
         organizer_id: user.id,
         date: dateTime.toISOString(),
         previous_meeting_id: previousMeetingId,
+        project_id: safeProjectId,
       })
       .select('id')
       .single()
@@ -138,7 +192,6 @@ export async function createMeeting(formData: FormData) {
     }
 
     // Insert attendees
-    const attendeeIds = formData.getAll('attendee_ids[]') as string[]
     if (attendeeIds.length > 0) {
       await adminClient
         .from('meeting_attendees')
