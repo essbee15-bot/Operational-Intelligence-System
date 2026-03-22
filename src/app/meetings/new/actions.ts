@@ -38,7 +38,7 @@ export async function createMeeting(formData: FormData) {
   const orgId = profile.organization_id as string
 
   if (meetingType === 'one_on_one') {
-    const attendeeId = formData.get('attendee_id') as string
+    const attendeeId = formData.get('attendee_id') as string | null
     const safeAttendeeId = attendeeId && UUID_RE.test(attendeeId) ? attendeeId : null
 
     const rawExternal = (formData.get('external_attendees') as string ?? '').trim()
@@ -94,7 +94,7 @@ export async function createMeeting(formData: FormData) {
     redirect(`/meetings/${meeting.id}?message=Meeting created`)
 
   } else if (meetingType === 'performance_review') {
-    const attendeeId = formData.get('attendee_id') as string
+    const attendeeId = formData.get('attendee_id') as string | null
     const safeAttendeeId = attendeeId && UUID_RE.test(attendeeId) ? attendeeId : null
 
     const rawExternal = (formData.get('external_attendees') as string ?? '').trim()
