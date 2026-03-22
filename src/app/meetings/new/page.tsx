@@ -54,13 +54,20 @@ export default async function NewMeetingPage({
     .neq('id', user.id)
     .order('full_name')
 
-  // Load previous meetings the user was involved in (for carry-forward)
-  const { data: previousMeetings } = await supabase
-    .from('meetings')
-    .select('id, title, purpose, meeting_type, date')
+  // Direct reports — for 1:1 and performance review selectors
+  const { data: directReports } = await supabase
+    .from('users')
+    .select('id, full_name, email')
     .eq('organization_id', profile.organization_id)
-    .order('date', { ascending: false })
-    .limit(20)
+    .eq('manager_id', user.id)
+    .eq('is_anonymised', false)
+    .order('full_name')
+
+  // Fall back to all org users if manager has no direct reports
+  const oneOnOnePool = (directReports && directReports.length > 0)
+    ? directReports
+    : (orgUsers ?? [])
+  const showingAllForOneOnOne = !directReports || directReports.length === 0
 
   const today = new Date().toISOString().split('T')[0]
 
@@ -109,7 +116,10 @@ export default async function NewMeetingPage({
       {/* 1:1 form */}
       {activeType === 'one_on_one' && (
         <div style={{ backgroundColor: 'white', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '1.5rem' }}>
-          <h2 style={{ margin: '0 0 1.25rem 0', fontSize: '1.0625rem', fontWeight: 600 }}>1:1 Meeting Details</h2>
+          <h2 style={{ margin: '0 0 0.25rem 0', fontSize: '1.0625rem', fontWeight: 600 }}>1:1 Meeting Details</h2>
+          <p style={{ margin: '0 0 1.25rem 0', fontSize: '0.8125rem', color: '#6b7280' }}>
+            Open actions from your last 1:1 with this person will carry forward automatically.
+          </p>
           <form style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
             <input type="hidden" name="meeting_type" value="one_on_one" />
 
@@ -138,29 +148,12 @@ export default async function NewMeetingPage({
                 style={{ padding: '0.5rem', border: '1px solid #d1d5db', borderRadius: '4px', fontSize: '0.875rem', backgroundColor: 'white' }}
               >
                 <option value="">Select employee…</option>
-                {(orgUsers ?? []).map(u => (
+                {showingAllForOneOnOne && (
+                  <option value="" disabled>No direct reports found — showing all staff</option>
+                )}
+                {oneOnOnePool.map(u => (
                   <option key={u.id} value={u.id}>{u.full_name ?? u.email}</option>
                 ))}
-              </select>
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem' }}>
-              <label htmlFor="previous_meeting_id" style={{ fontSize: '0.875rem', fontWeight: 500 }}>
-                Previous meeting <span style={{ color: '#9ca3af', fontWeight: 400 }}>(optional — carries forward open actions)</span>
-              </label>
-              <select
-                id="previous_meeting_id" name="previous_meeting_id"
-                defaultValue={(previousMeetings ?? []).filter(m => m.meeting_type === 'one_on_one')[0]?.id ?? ''}
-                style={{ padding: '0.5rem', border: '1px solid #d1d5db', borderRadius: '4px', fontSize: '0.875rem', backgroundColor: 'white' }}
-              >
-                <option value="">None (new series)</option>
-                {(previousMeetings ?? [])
-                  .filter(m => m.meeting_type === 'one_on_one')
-                  .map(m => (
-                    <option key={m.id} value={m.id}>
-                      {m.title} — {new Date(m.date).toLocaleDateString('en-GB')}
-                    </option>
-                  ))}
               </select>
             </div>
 
@@ -185,7 +178,10 @@ export default async function NewMeetingPage({
       {/* Performance Review form */}
       {activeType === 'performance_review' && (
         <div style={{ backgroundColor: 'white', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '1.5rem' }}>
-          <h2 style={{ margin: '0 0 1.25rem 0', fontSize: '1.0625rem', fontWeight: 600 }}>Performance Review Details</h2>
+          <h2 style={{ margin: '0 0 0.25rem 0', fontSize: '1.0625rem', fontWeight: 600 }}>Performance Review Details</h2>
+          <p style={{ margin: '0 0 1.25rem 0', fontSize: '0.8125rem', color: '#6b7280' }}>
+            Open actions from the previous review for this person will carry forward automatically.
+          </p>
           <form style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
             <input type="hidden" name="meeting_type" value="performance_review" />
 
@@ -214,7 +210,10 @@ export default async function NewMeetingPage({
                 style={{ padding: '0.5rem', border: '1px solid #d1d5db', borderRadius: '4px', fontSize: '0.875rem', backgroundColor: 'white' }}
               >
                 <option value="">Select employee…</option>
-                {(orgUsers ?? []).map(u => (
+                {showingAllForOneOnOne && (
+                  <option value="" disabled>No direct reports found — showing all staff</option>
+                )}
+                {oneOnOnePool.map(u => (
                   <option key={u.id} value={u.id}>{u.full_name ?? u.email}</option>
                 ))}
               </select>
@@ -229,26 +228,6 @@ export default async function NewMeetingPage({
                 placeholder="e.g. Q1 2026, Annual 2025"
                 style={{ padding: '0.5rem', border: '1px solid #d1d5db', borderRadius: '4px', fontSize: '0.875rem' }}
               />
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem' }}>
-              <label htmlFor="previous_meeting_id" style={{ fontSize: '0.875rem', fontWeight: 500 }}>
-                Previous review <span style={{ color: '#9ca3af', fontWeight: 400 }}>(optional — carries forward open actions)</span>
-              </label>
-              <select
-                id="previous_meeting_id" name="previous_meeting_id"
-                defaultValue={(previousMeetings ?? []).filter(m => m.meeting_type === 'performance_review')[0]?.id ?? ''}
-                style={{ padding: '0.5rem', border: '1px solid #d1d5db', borderRadius: '4px', fontSize: '0.875rem', backgroundColor: 'white' }}
-              >
-                <option value="">None (first review)</option>
-                {(previousMeetings ?? [])
-                  .filter(m => m.meeting_type === 'performance_review')
-                  .map(m => (
-                    <option key={m.id} value={m.id}>
-                      {m.title} — {new Date(m.date).toLocaleDateString('en-GB')}
-                    </option>
-                  ))}
-              </select>
             </div>
 
             <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.25rem' }}>
@@ -272,9 +251,12 @@ export default async function NewMeetingPage({
       {/* Team / Project meeting form */}
       {(activeType === 'team_meeting' || activeType === 'project_meeting') && (
         <div style={{ backgroundColor: 'white', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '1.5rem' }}>
-          <h2 style={{ margin: '0 0 1.25rem 0', fontSize: '1.0625rem', fontWeight: 600 }}>
+          <h2 style={{ margin: '0 0 0.25rem 0', fontSize: '1.0625rem', fontWeight: 600 }}>
             {activeType === 'team_meeting' ? 'Team Meeting' : 'Project Meeting'} Details
           </h2>
+          <p style={{ margin: '0 0 1.25rem 0', fontSize: '0.8125rem', color: '#6b7280' }}>
+            Any open actions from your previous {activeType === 'team_meeting' ? 'team' : 'project'} meeting with the same attendees will carry forward automatically.
+          </p>
           <form style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
             <input type="hidden" name="meeting_type" value={activeType} />
 
@@ -318,26 +300,6 @@ export default async function NewMeetingPage({
                 {(orgUsers ?? []).map(u => (
                   <option key={u.id} value={u.id}>{u.full_name ?? u.email}</option>
                 ))}
-              </select>
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem' }}>
-              <label htmlFor="previous_meeting_id" style={{ fontSize: '0.875rem', fontWeight: 500 }}>
-                Previous meeting <span style={{ color: '#9ca3af', fontWeight: 400 }}>(optional — carries forward open actions)</span>
-              </label>
-              <select
-                id="previous_meeting_id" name="previous_meeting_id"
-                defaultValue={(previousMeetings ?? []).filter(m => m.meeting_type === activeType)[0]?.id ?? ''}
-                style={{ padding: '0.5rem', border: '1px solid #d1d5db', borderRadius: '4px', fontSize: '0.875rem', backgroundColor: 'white' }}
-              >
-                <option value="">None (new series)</option>
-                {(previousMeetings ?? [])
-                  .filter(m => m.meeting_type === activeType)
-                  .map(m => (
-                    <option key={m.id} value={m.id}>
-                      {m.purpose ?? m.title} — {new Date(m.date).toLocaleDateString('en-GB')}
-                    </option>
-                  ))}
               </select>
             </div>
 
