@@ -35,7 +35,10 @@ export async function createMeeting(formData: FormData) {
   const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
   const adminClient = createAdminClient()
-  const orgId = profile.organization_id as string
+  const orgId = profile.organization_id as string | null
+  if (!orgId) {
+    redirect('/meetings/new?message=Your account is not linked to an organisation — contact your admin')
+  }
 
   if (meetingType === 'one_on_one') {
     const attendeeId = formData.get('attendee_id') as string | null

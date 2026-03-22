@@ -261,14 +261,16 @@ export default async function NewMeetingPage({
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem' }}>
-              <label htmlFor="attendee_id" style={{ fontSize: '0.875rem', fontWeight: 500 }}>Employee</label>
+              <label htmlFor="attendee_id" style={{ fontSize: '0.875rem', fontWeight: 500 }}>
+                Employee <span style={{ color: '#9ca3af', fontWeight: 400 }}>(optional)</span>
+              </label>
               {showingAllForOneOnOne && (
                 <p style={{ margin: '0 0 0.25rem 0', fontSize: '0.8125rem', color: '#9ca3af' }}>
                   No direct reports found — showing all staff.
                 </p>
               )}
               <select
-                id="attendee_id" name="attendee_id" required
+                id="attendee_id" name="attendee_id"
                 style={{ padding: '0.5rem', border: '1px solid #d1d5db', borderRadius: '4px', fontSize: '0.875rem', backgroundColor: 'white' }}
               >
                 <option value="">Select employee…</option>
@@ -340,14 +342,16 @@ export default async function NewMeetingPage({
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem' }}>
-              <label htmlFor="attendee_id" style={{ fontSize: '0.875rem', fontWeight: 500 }}>Employee being reviewed</label>
+              <label htmlFor="attendee_id" style={{ fontSize: '0.875rem', fontWeight: 500 }}>
+                Employee being reviewed <span style={{ color: '#9ca3af', fontWeight: 400 }}>(optional)</span>
+              </label>
               {showingAllForOneOnOne && (
                 <p style={{ margin: '0 0 0.25rem 0', fontSize: '0.8125rem', color: '#9ca3af' }}>
                   No direct reports found — showing all staff.
                 </p>
               )}
               <select
-                id="attendee_id" name="attendee_id" required
+                id="attendee_id" name="attendee_id"
                 style={{ padding: '0.5rem', border: '1px solid #d1d5db', borderRadius: '4px', fontSize: '0.875rem', backgroundColor: 'white' }}
               >
                 <option value="">Select employee…</option>
