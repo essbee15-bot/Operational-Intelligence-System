@@ -214,6 +214,47 @@ export async function resetUserPassword(formData: FormData) {
 }
 
 /**
+ * Force-confirms the email for a user so they can log in with their password.
+ * Useful when users were created via Supabase dashboard (no email_confirm: true).
+ */
+export async function confirmUserEmail(formData: FormData) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
+
+  const { data: adminProfile } = await supabase
+    .from('users')
+    .select('organization_id, role')
+    .eq('id', user.id)
+    .single()
+
+  if (!adminProfile || adminProfile.role !== 'admin') redirect('/?message=Unauthorised')
+
+  const targetUserId = formData.get('user_id') as string
+
+  // Verify target belongs to same org
+  const { data: targetProfile } = await supabase
+    .from('users')
+    .select('organization_id, full_name')
+    .eq('id', targetUserId)
+    .eq('organization_id', adminProfile.organization_id)
+    .single()
+
+  if (!targetProfile) redirect('/admin/users?message=User not found')
+
+  const adminClient = createAdminClient()
+  const { error } = await adminClient.auth.admin.updateUserById(targetUserId, {
+    email_confirm: true,
+  })
+
+  if (error) {
+    redirect(`/admin/users/${targetUserId}/edit?message=Failed to activate account: ${error.message}`)
+  }
+
+  redirect(`/admin/users/${targetUserId}/edit?message=Account activated — ${targetProfile.full_name} can now sign in`)
+}
+
+/**
  * Updates an existing user's profile within the org admin's organisation.
  * Only callable by authenticated org admins.
  */

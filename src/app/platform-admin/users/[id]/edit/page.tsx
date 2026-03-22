@@ -1,7 +1,7 @@
 import { createClient } from '@/utils/supabase/server'
 import { redirect } from 'next/navigation'
 import { createAdminClient } from '@/utils/supabase/admin'
-import { platformEditUser, platformResetPassword } from '../../actions'
+import { platformEditUser, platformResetPassword, platformConfirmUserEmail } from '../../actions'
 
 export default async function PlatformEditUserPage({
   params,
@@ -35,7 +35,10 @@ export default async function PlatformEditUserPage({
 
   if (!targetUser) redirect('/platform-admin/users?message=User not found')
 
-  const isSuccess = message?.includes('successfully')
+  const { data: authData } = await adminClient.auth.admin.getUserById(id)
+  const emailConfirmed = !!authData?.user?.email_confirmed_at
+
+  const isSuccess = message?.includes('successfully') || message?.includes('activated')
 
   return (
     <div style={{ maxWidth: '500px', margin: '2rem auto', padding: '0 1rem', fontFamily: 'system-ui, sans-serif' }}>
@@ -44,6 +47,33 @@ export default async function PlatformEditUserPage({
       <p style={{ color: '#6b7280', fontSize: '0.875rem', margin: '0 0 1.5rem 0' }}>
         {(targetUser.organizations as unknown as { name: string } | null)?.name ?? '—'}
       </p>
+
+      {!emailConfirmed && (
+        <div style={{
+          padding: '0.875rem 1rem',
+          borderRadius: '6px',
+          marginBottom: '1.25rem',
+          backgroundColor: '#fffbeb',
+          border: '1px solid #fcd34d',
+          color: '#92400e',
+          fontSize: '0.875rem',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          gap: '1rem',
+        }}>
+          <span>⚠️ Email not confirmed — this user cannot sign in until activated.</span>
+          <form style={{ flexShrink: 0 }}>
+            <input type="hidden" name="user_id" value={targetUser.id} />
+            <button
+              formAction={platformConfirmUserEmail}
+              style={{ padding: '0.375rem 0.875rem', backgroundColor: '#d97706', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.8125rem', whiteSpace: 'nowrap' }}
+            >
+              Activate Account
+            </button>
+          </form>
+        </div>
+      )}
 
       {message && (
         <div style={{

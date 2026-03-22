@@ -79,6 +79,31 @@ export async function platformEditUser(formData: FormData) {
   redirect(`/platform-admin/users?message=${fullName} updated successfully`)
 }
 
+export async function platformConfirmUserEmail(formData: FormData) {
+  await verifyPlatformAdmin()
+
+  const targetUserId = formData.get('user_id') as string
+  const adminClient = createAdminClient()
+
+  const { data: targetProfile } = await adminClient
+    .from('users')
+    .select('full_name')
+    .eq('id', targetUserId)
+    .single()
+
+  if (!targetProfile) redirect('/platform-admin/users?message=User not found')
+
+  const { error } = await adminClient.auth.admin.updateUserById(targetUserId, {
+    email_confirm: true,
+  })
+
+  if (error) {
+    redirect(`/platform-admin/users/${targetUserId}/edit?message=Failed to activate account: ${error.message}`)
+  }
+
+  redirect(`/platform-admin/users/${targetUserId}/edit?message=Account activated — ${targetProfile.full_name} can now sign in`)
+}
+
 export async function platformResetPassword(formData: FormData) {
   const performer = await verifyPlatformAdmin()
 

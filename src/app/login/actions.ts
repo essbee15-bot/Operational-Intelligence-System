@@ -15,7 +15,16 @@ export async function login(formData: FormData) {
   const { error } = await supabase.auth.signInWithPassword(data)
 
   if (error) {
-    redirect('/login?message=Invalid email or password')
+    // Map Supabase error codes to friendly messages
+    const msg = error.message?.toLowerCase() ?? ''
+    if (msg.includes('email not confirmed')) {
+      redirect('/login?message=This account has not confirmed its email. Ask your admin to resend the confirmation or reset your password.')
+    }
+    if (msg.includes('invalid login credentials') || msg.includes('invalid password') || msg.includes('user not found')) {
+      redirect('/login?message=Invalid email or password')
+    }
+    // Pass through any other Supabase error so it's visible
+    redirect(`/login?message=${encodeURIComponent(error.message)}`)
   }
 
   revalidatePath('/', 'layout')

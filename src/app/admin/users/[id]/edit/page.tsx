@@ -1,6 +1,7 @@
 import { createClient } from '@/utils/supabase/server'
+import { createAdminClient } from '@/utils/supabase/admin'
 import { redirect } from 'next/navigation'
-import { updateUser, resetUserPassword } from '../../actions'
+import { updateUser, resetUserPassword, confirmUserEmail } from '../../actions'
 
 export default async function EditUserPage({
   params,
@@ -35,6 +36,11 @@ export default async function EditUserPage({
 
   if (!targetUser) redirect('/admin/users?message=User not found')
 
+  // Check auth status (email confirmed?) using admin client
+  const adminClient = createAdminClient()
+  const { data: authData } = await adminClient.auth.admin.getUserById(id)
+  const emailConfirmed = !!authData?.user?.email_confirmed_at
+
   // Load managers for the dropdown
   const { data: orgUsers } = await supabase
     .from('users')
@@ -53,6 +59,33 @@ export default async function EditUserPage({
       <p style={{ color: '#6b7280', fontSize: '0.875rem', margin: '0 0 1.5rem 0' }}>
         Update {targetUser.full_name}&apos;s profile details.
       </p>
+
+      {!emailConfirmed && (
+        <div style={{
+          padding: '0.875rem 1rem',
+          borderRadius: '6px',
+          marginBottom: '1.25rem',
+          backgroundColor: '#fffbeb',
+          border: '1px solid #fcd34d',
+          color: '#92400e',
+          fontSize: '0.875rem',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          gap: '1rem',
+        }}>
+          <span>⚠️ This account&apos;s email is <strong>not confirmed</strong> — the user cannot sign in until activated.</span>
+          <form style={{ flexShrink: 0 }}>
+            <input type="hidden" name="user_id" value={targetUser.id} />
+            <button
+              formAction={confirmUserEmail}
+              style={{ padding: '0.375rem 0.875rem', backgroundColor: '#d97706', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.8125rem', whiteSpace: 'nowrap' }}
+            >
+              Activate Account
+            </button>
+          </form>
+        </div>
+      )}
 
       {message && (
         <div style={{
