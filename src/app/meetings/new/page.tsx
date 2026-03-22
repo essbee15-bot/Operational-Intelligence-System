@@ -174,7 +174,7 @@ export default async function NewMeetingPage({
         .filter((u): u is { id: string; full_name: string | null; email: string } => u !== null)
     } else {
       // First booking: load project team members
-      const project = (orgProjects ?? []).find(p => p.id === projectIdParam)
+      const project = (orgProjects ?? []).find(p => p.id === validProjectId)
       if (project?.team_id) {
         const { data: members } = await supabase
           .from('team_members')
