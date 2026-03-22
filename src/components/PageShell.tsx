@@ -40,7 +40,7 @@ export default async function PageShell({
   // Check if AI assistant is enabled for this org (show chat widget)
   let aiEnabled = false
 
-  if (!isPlatformAdmin && profile.organization_id) {
+  if (profile.organization_id) {
     const [{ data: org }, { data: aiSettings }] = await Promise.all([
       adminClient
         .from('organizations')
@@ -65,6 +65,7 @@ export default async function PageShell({
         orgName={orgName}
         isPlatformAdmin={isPlatformAdmin}
         isAdmin={isAdmin}
+        hasOrg={!!profile.organization_id}
         signoutAction={signout}
       />
       <div className="shell-content">

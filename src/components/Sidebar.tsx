@@ -94,6 +94,7 @@ export default function Sidebar({
   orgName,
   isPlatformAdmin,
   isAdmin,
+  hasOrg = false,
   signoutAction,
 }: {
   name: string
@@ -101,6 +102,7 @@ export default function Sidebar({
   orgName?: string | null
   isPlatformAdmin: boolean
   isAdmin: boolean
+  hasOrg?: boolean
   signoutAction: () => Promise<void>
 }) {
   const pathname = usePathname()
@@ -135,6 +137,23 @@ export default function Sidebar({
       { label: 'Platform Team',    href: '/platform-admin/team',      icon: 'reporting' },
       { label: 'Audit Log',        href: '/platform-admin/audit',     icon: 'actions' },
     )
+    // If the platform admin also belongs to an org, show regular app links too
+    if (hasOrg) {
+      mainItems.push(
+        { label: 'Dashboard',       href: '/',          icon: 'dashboard', exact: true },
+        { label: 'Meetings',        href: '/meetings',  icon: 'meetings' },
+        { label: 'Actions',         href: '/actions',   icon: 'actions' },
+        { label: 'KPIs',            href: '/kpis',      icon: 'kpis' },
+        { label: 'Goals & OKRs',    href: '/goals',     icon: 'goals' },
+        { label: 'Projects',        href: '/projects',  icon: 'projects' },
+        { label: 'Reporting Lines', href: '/reporting', icon: 'reporting' },
+      )
+      if (isAdmin) {
+        adminItems.push(
+          { label: 'Administration', href: '/admin', icon: 'admin', exact: true },
+        )
+      }
+    }
   } else {
     mainItems.push(
       { label: 'Dashboard',       href: '/',          icon: 'dashboard', exact: true },
@@ -196,7 +215,12 @@ export default function Sidebar({
           </>
         )}
 
-        {mainItems.length > 0 && mainItems.map(renderLink)}
+        {mainItems.length > 0 && (
+          <>
+            {platformItems.length > 0 && <div className="sidebar-section-label">My Org</div>}
+            {mainItems.map(renderLink)}
+          </>
+        )}
 
         {adminItems.length > 0 && (
           <>
