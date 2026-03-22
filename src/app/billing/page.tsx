@@ -32,7 +32,7 @@ export default async function BillingPage({
     .single()
 
   if (!profile) redirect('/login')
-  if (profile.is_platform_admin) redirect('/')
+  if (profile.is_platform_admin && !profile.organization_id) redirect('/')
   if (profile.role !== 'admin') {
     redirect('/?message=Only org admins can access billing.')
   }

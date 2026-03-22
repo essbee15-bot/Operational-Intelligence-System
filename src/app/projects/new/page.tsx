@@ -21,7 +21,7 @@ export default async function NewProjectPage({
     .single()
 
   if (!profile) redirect('/login')
-  if (profile.is_platform_admin) redirect('/')
+  if (profile.is_platform_admin && !profile.organization_id) redirect('/')
 
   const role = profile.role as string
   if (role !== 'admin' && role !== 'manager') {

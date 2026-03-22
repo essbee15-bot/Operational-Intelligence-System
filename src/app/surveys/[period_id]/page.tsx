@@ -24,7 +24,7 @@ export default async function SurveyResponsePage({
     .single()
 
   if (!profile) redirect('/login')
-  if (profile.is_platform_admin) redirect('/')
+  if (profile.is_platform_admin && !profile.organization_id) redirect('/')
 
   const adminClient = createAdminClient()
 

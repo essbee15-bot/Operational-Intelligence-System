@@ -35,8 +35,8 @@ export default async function MeetingsPage({
 
   if (!profile) redirect('/login')
 
-  // Platform admins have no organisation — redirect to cross-org overview
-  if (profile.is_platform_admin) redirect('/platform-admin/meetings')
+  // Platform admins without an org still redirect to cross-org overview
+  if (profile.is_platform_admin && !profile.organization_id) redirect('/platform-admin/meetings')
 
   // Load all org users for name resolution
   const { data: orgUsers } = await supabase

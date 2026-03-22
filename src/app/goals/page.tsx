@@ -29,7 +29,7 @@ export default async function GoalsPage({
     .single()
 
   if (!profile) redirect('/login')
-  if (profile.is_platform_admin) redirect('/')
+  if (profile.is_platform_admin && !profile.organization_id) redirect('/')
 
   const isManager = profile.role === 'admin' || profile.role === 'manager'
   const isAdmin   = profile.role === 'admin'

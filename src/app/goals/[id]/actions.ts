@@ -15,7 +15,7 @@ async function verifyObjectiveAccess(objectiveId: string, requireManager = false
     .eq('id', user.id)
     .single()
 
-  if (!profile || profile.is_platform_admin) redirect('/goals')
+  if (!profile || (profile.is_platform_admin && !profile.organization_id)) redirect('/goals')
 
   const isManager = profile.role === 'admin' || profile.role === 'manager'
 

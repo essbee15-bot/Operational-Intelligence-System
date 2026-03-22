@@ -15,7 +15,7 @@ export async function createObjective(formData: FormData) {
     .eq('id', user.id)
     .single()
 
-  if (!profile || profile.is_platform_admin) redirect('/')
+  if (!profile || (profile.is_platform_admin && !profile.organization_id)) redirect('/')
   if (profile.role !== 'admin' && profile.role !== 'manager') {
     redirect('/goals?message=Only managers and admins can create objectives')
   }

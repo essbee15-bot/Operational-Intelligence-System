@@ -48,7 +48,7 @@ export default async function ProjectDetailPage({
     .single()
 
   if (!profile) redirect('/login')
-  if (profile.is_platform_admin) redirect('/')
+  if (profile.is_platform_admin && !profile.organization_id) redirect('/')
 
   const adminClient = createAdminClient()
   const orgId = profile.organization_id as string
