@@ -131,7 +131,7 @@ export function AttendeesPicker({ defaultAttendees }: AttendeesPickerProps) {
         />
 
         {/* Dropdown results */}
-        {(results.length > 0 || loading) && (
+        {(results.length > 0 || loading || query.length >= 3) && (
           <div style={{
             position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 10,
             backgroundColor: 'white', border: '1px solid #d1d5db',
@@ -141,6 +141,11 @@ export function AttendeesPicker({ defaultAttendees }: AttendeesPickerProps) {
             {loading && (
               <div style={{ padding: '0.5rem 0.75rem', fontSize: '0.8125rem', color: '#9ca3af' }}>
                 Searching…
+              </div>
+            )}
+            {!loading && results.length === 0 && query.length >= 3 && (
+              <div style={{ padding: '0.5rem 0.75rem', fontSize: '0.8125rem', color: '#9ca3af' }}>
+                No results found.
               </div>
             )}
             {results.map(u => (

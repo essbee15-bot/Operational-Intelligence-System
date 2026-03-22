@@ -46,6 +46,17 @@ export default async function NewMeetingPage({
 
   if (!profile) redirect('/login')
 
+  function toUser(val: unknown): { id: string; full_name: string | null; email: string } | null {
+    if (!val || typeof val !== 'object' || Array.isArray(val)) return null
+    const u = val as Record<string, unknown>
+    if (typeof u.id !== 'string') return null
+    return {
+      id: u.id,
+      full_name: typeof u.full_name === 'string' ? u.full_name : null,
+      email: typeof u.email === 'string' ? u.email : '',
+    }
+  }
+
   // Load org users (for attendee selection)
   const { data: orgUsers } = await supabase
     .from('users')
@@ -90,7 +101,7 @@ export default async function NewMeetingPage({
       .select('users(id, full_name, email)')
       .eq('meeting_id', prevTeamMeeting.id)
     teamDefaults = (prevAttendees ?? [])
-      .map(row => (row.users as unknown as { id: string; full_name: string | null; email: string } | null))
+      .map(row => toUser(row.users))
       .filter((u): u is { id: string; full_name: string | null; email: string } => u !== null)
   } else {
     // First booking: direct reports + team members the user belongs to
@@ -109,7 +120,7 @@ export default async function NewMeetingPage({
         .in('team_id', teamIds)
         .neq('user_id', user.id)
       teamMates = (members ?? [])
-        .map(row => (row.users as unknown as { id: string; full_name: string | null; email: string } | null))
+        .map(row => toUser(row.users))
         .filter((u): u is { id: string; full_name: string | null; email: string } => u !== null)
     }
 
