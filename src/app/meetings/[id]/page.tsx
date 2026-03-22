@@ -108,18 +108,16 @@ export default async function MeetingDetailPage({
 
   const adminClient = createAdminClient()
 
-  // Load meeting (fetch by id only, then verify org access in code)
-  const { data: meeting } = await adminClient
+  // Load meeting using the user's session client so RLS applies correctly.
+  // adminClient (service role) can fail when FORCE ROW LEVEL SECURITY is set
+  // because it has no session user and user_organization_id() returns NULL.
+  const { data: meeting } = await supabase
     .from('meetings')
     .select('id, title, meeting_type, organizer_id, attendee_id, date, purpose, notes, review_period, previous_meeting_id, external_attendees, organization_id, kpi_notes, overall_rating, performance_reasons, success_failure_surprises, development_requests, goals_next_period, general_notes, project_involvement_notes, tests_experiments_notes, aob_notes')
     .eq('id', id)
     .single()
 
-  // Verify the meeting belongs to the user's org (platform admins can see any meeting)
   if (!meeting) redirect('/meetings?message=Meeting not found')
-  if (!profile.is_platform_admin && meeting.organization_id !== profile.organization_id) {
-    redirect('/meetings?message=Meeting not found')
-  }
 
   // Load org users for dropdowns
   const { data: orgUsers } = await adminClient
