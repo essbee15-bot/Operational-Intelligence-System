@@ -411,8 +411,8 @@ export default async function MeetingDetailPage({
                     return records[0] > records[1] ? '#16a34a' : records[0] < records[1] ? '#dc2626' : '#9ca3af'
                   })()
                   return (
-                    <a key={kpi.id} href={`/kpis/${kpi.id}`} style={{
-                      display: 'block', textDecoration: 'none',
+                    <div key={kpi.id} style={{
+                      display: 'block',
                       background: '#f9fafb', borderRadius: '6px', padding: '0.75rem',
                       border: '1px solid #e5e7eb',
                       borderLeftWidth: '3px',
@@ -435,7 +435,7 @@ export default async function MeetingDetailPage({
                           {onTarget ? '✓ on target' : '✗ below target'}
                         </div>
                       )}
-                    </a>
+                    </div>
                   )
                 })}
               </div>
