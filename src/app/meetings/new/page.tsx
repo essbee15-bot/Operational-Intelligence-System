@@ -287,6 +287,7 @@ export default async function NewMeetingPage({
                 name="external_attendees"
                 type="text"
                 maxLength={500}
+                autoComplete="off"
                 placeholder="e.g. John Smith, Sarah Jones"
                 style={{ padding: '0.5rem', border: '1px solid #d1d5db', borderRadius: '4px', fontSize: '0.875rem' }}
               />
@@ -365,6 +366,7 @@ export default async function NewMeetingPage({
                 name="external_attendees"
                 type="text"
                 maxLength={500}
+                autoComplete="off"
                 placeholder="e.g. John Smith, Sarah Jones"
                 style={{ padding: '0.5rem', border: '1px solid #d1d5db', borderRadius: '4px', fontSize: '0.875rem' }}
               />
@@ -455,6 +457,7 @@ export default async function NewMeetingPage({
                 name="external_attendees"
                 type="text"
                 maxLength={500}
+                autoComplete="off"
                 placeholder="e.g. John Smith, Sarah Jones"
                 style={{ padding: '0.5rem', border: '1px solid #d1d5db', borderRadius: '4px', fontSize: '0.875rem' }}
               />
@@ -530,6 +533,7 @@ export default async function NewMeetingPage({
                     name="external_attendees"
                     type="text"
                     maxLength={500}
+                    autoComplete="off"
                     placeholder="e.g. John Smith, Sarah Jones"
                     style={{ padding: '0.5rem', border: '1px solid #d1d5db', borderRadius: '4px', fontSize: '0.875rem' }}
                   />
