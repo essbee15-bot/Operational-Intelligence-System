@@ -497,18 +497,7 @@ export default async function HomePage({
               </a>
             )}
             {isPlatformAdmin && (
-              <a
-                href="/?tab=platform"
-                style={{
-                  padding: '0.5rem 1rem',
-                  borderRadius: '6px',
-                  textDecoration: 'none',
-                  fontSize: '0.875rem',
-                  fontWeight: activeTab === 'platform' ? 600 : 400,
-                  backgroundColor: activeTab === 'platform' ? '#111827' : 'transparent',
-                  color: activeTab === 'platform' ? 'white' : '#6b7280',
-                }}
-              >
+              <a href="/?tab=platform" className={`tab-item${activeTab === 'platform' ? ' active' : ''}`}>
                 Platform
               </a>
             )}
