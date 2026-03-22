@@ -4,6 +4,17 @@ import { createMeeting } from './actions'
 import { AttendeesPicker } from '@/components/AttendeesPicker'
 import { ProjectSelector } from '@/components/ProjectSelector'
 
+function toUser(val: unknown): { id: string; full_name: string | null; email: string } | null {
+  if (!val || typeof val !== 'object' || Array.isArray(val)) return null
+  const u = val as Record<string, unknown>
+  if (typeof u.id !== 'string') return null
+  return {
+    id: u.id,
+    full_name: typeof u.full_name === 'string' ? u.full_name : null,
+    email: typeof u.email === 'string' ? u.email : '',
+  }
+}
+
 const MEETING_TYPES = [
   {
     key: 'one_on_one',
@@ -46,17 +57,6 @@ export default async function NewMeetingPage({
     .single()
 
   if (!profile) redirect('/login')
-
-  function toUser(val: unknown): { id: string; full_name: string | null; email: string } | null {
-    if (!val || typeof val !== 'object' || Array.isArray(val)) return null
-    const u = val as Record<string, unknown>
-    if (typeof u.id !== 'string') return null
-    return {
-      id: u.id,
-      full_name: typeof u.full_name === 'string' ? u.full_name : null,
-      email: typeof u.email === 'string' ? u.email : '',
-    }
-  }
 
   // Load org users (for attendee selection)
   const { data: orgUsers } = await supabase
@@ -135,23 +135,31 @@ export default async function NewMeetingPage({
   }
 
   // Org projects for project meeting selector
-  const { data: orgProjects } = await supabase
-    .from('projects')
-    .select('id, name, team_id')
-    .eq('organization_id', profile.organization_id)
-    .order('name')
+  const orgProjects = activeType === 'project_meeting'
+    ? (await supabase
+        .from('projects')
+        .select('id, name, team_id')
+        .eq('organization_id', profile.organization_id)
+        .order('name')
+      ).data
+    : null
+
+  const UUID_RE_PAGE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+  const validProjectId = projectIdParam && UUID_RE_PAGE.test(projectIdParam)
+    ? projectIdParam
+    : undefined
 
   // Project meeting defaults
   let projectDefaults: { id: string; full_name: string | null; email: string }[] = []
 
-  if (activeType === 'project_meeting' && projectIdParam) {
+  if (activeType === 'project_meeting' && validProjectId) {
     // Check for previous project meeting for this project (carry-forward)
     const { data: prevProjectMeeting } = await supabase
       .from('meetings')
       .select('id')
       .eq('organization_id', profile.organization_id)
       .eq('meeting_type', 'project_meeting')
-      .eq('project_id', projectIdParam)
+      .eq('project_id', validProjectId)
       .order('date', { ascending: false })
       .limit(1)
       .maybeSingle()
