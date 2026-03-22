@@ -38,7 +38,7 @@ export function AttendeesPicker({ defaultAttendees }: AttendeesPickerProps) {
           `/api/users/search?q=${encodeURIComponent(query)}&exclude=${encodeURIComponent(exclude)}`
         )
         const data = await res.json()
-        setResults(data.users ?? [])
+        setResults((data.users ?? []).slice(0, 10))
       } finally {
         setLoading(false)
       }
