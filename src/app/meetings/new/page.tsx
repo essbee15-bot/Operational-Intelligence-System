@@ -2,6 +2,7 @@ import { createClient } from '@/utils/supabase/server'
 import { redirect } from 'next/navigation'
 import { createMeeting } from './actions'
 import { AttendeesPicker } from '@/components/AttendeesPicker'
+import { ProjectSelector } from '@/components/ProjectSelector'
 
 const MEETING_TYPES = [
   {
@@ -29,9 +30,9 @@ const MEETING_TYPES = [
 export default async function NewMeetingPage({
   searchParams,
 }: {
-  searchParams: Promise<{ type?: string; message?: string }>
+  searchParams: Promise<{ type?: string; message?: string; project_id?: string }>
 }) {
-  const { type: typeParam, message } = await searchParams
+  const { type: typeParam, message, project_id: projectIdParam } = await searchParams
   const activeType = MEETING_TYPES.find(t => t.key === typeParam)?.key ?? null
 
   const supabase = await createClient()
@@ -131,6 +132,52 @@ export default async function NewMeetingPage({
       seen.add(u.id)
       return true
     })
+  }
+
+  // Org projects for project meeting selector
+  const { data: orgProjects } = await supabase
+    .from('projects')
+    .select('id, name, team_id')
+    .eq('organization_id', profile.organization_id)
+    .order('name')
+
+  // Project meeting defaults
+  let projectDefaults: { id: string; full_name: string | null; email: string }[] = []
+
+  if (activeType === 'project_meeting' && projectIdParam) {
+    // Check for previous project meeting for this project (carry-forward)
+    const { data: prevProjectMeeting } = await supabase
+      .from('meetings')
+      .select('id')
+      .eq('organization_id', profile.organization_id)
+      .eq('meeting_type', 'project_meeting')
+      .eq('project_id', projectIdParam)
+      .order('date', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    if (prevProjectMeeting) {
+      const { data: prevAttendees } = await supabase
+        .from('meeting_attendees')
+        .select('users(id, full_name, email)')
+        .eq('meeting_id', prevProjectMeeting.id)
+      projectDefaults = (prevAttendees ?? [])
+        .map(row => toUser(row.users))
+        .filter((u): u is { id: string; full_name: string | null; email: string } => u !== null)
+    } else {
+      // First booking: load project team members
+      const project = (orgProjects ?? []).find(p => p.id === projectIdParam)
+      if (project?.team_id) {
+        const { data: members } = await supabase
+          .from('team_members')
+          .select('users(id, full_name, email)')
+          .eq('team_id', project.team_id)
+          .neq('user_id', user.id)
+        projectDefaults = (members ?? [])
+          .map(row => toUser(row.users))
+          .filter((u): u is { id: string; full_name: string | null; email: string } => u !== null)
+      }
+    }
   }
 
   const today = new Date().toISOString().split('T')[0]
@@ -316,17 +363,15 @@ export default async function NewMeetingPage({
         </div>
       )}
 
-      {/* Team / Project meeting form */}
-      {(activeType === 'team_meeting' || activeType === 'project_meeting') && (
+      {/* Team meeting form */}
+      {activeType === 'team_meeting' && (
         <div style={{ backgroundColor: 'white', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '1.5rem' }}>
-          <h2 style={{ margin: '0 0 0.25rem 0', fontSize: '1.0625rem', fontWeight: 600 }}>
-            {activeType === 'team_meeting' ? 'Team Meeting' : 'Project Meeting'} Details
-          </h2>
+          <h2 style={{ margin: '0 0 0.25rem 0', fontSize: '1.0625rem', fontWeight: 600 }}>Team Meeting Details</h2>
           <p style={{ margin: '0 0 1.25rem 0', fontSize: '0.8125rem', color: '#6b7280' }}>
-            Any open actions from your previous {activeType === 'team_meeting' ? 'team' : 'project'} meeting with the same attendees will carry forward automatically.
+            Any open actions from your previous team meeting with the same attendees will carry forward automatically.
           </p>
           <form style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            <input type="hidden" name="meeting_type" value={activeType} />
+            <input type="hidden" name="meeting_type" value="team_meeting" />
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem' }}>
@@ -355,33 +400,15 @@ export default async function NewMeetingPage({
               />
             </div>
 
-            {activeType === 'team_meeting' ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem' }}>
-                <label style={{ fontSize: '0.875rem', fontWeight: 500 }}>Attendees</label>
-                {prevTeamMeeting && (
-                  <p style={{ margin: 0, fontSize: '0.8125rem', color: '#6b7280' }}>
-                    Pre-filled from your last team meeting — adjust as needed.
-                  </p>
-                )}
-                <AttendeesPicker defaultAttendees={teamDefaults} />
-              </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem' }}>
-                <label style={{ fontSize: '0.875rem', fontWeight: 500 }}>
-                  Attendees <span style={{ color: '#9ca3af', fontWeight: 400 }}>(hold Ctrl/Cmd to select multiple)</span>
-                </label>
-                <select
-                  name="attendee_ids[]"
-                  multiple
-                  size={Math.min(8, (orgUsers ?? []).length + 1)}
-                  style={{ padding: '0.5rem', border: '1px solid #d1d5db', borderRadius: '4px', fontSize: '0.875rem', backgroundColor: 'white' }}
-                >
-                  {(orgUsers ?? []).map(u => (
-                    <option key={u.id} value={u.id}>{u.full_name ?? u.email}</option>
-                  ))}
-                </select>
-              </div>
-            )}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem' }}>
+              <label style={{ fontSize: '0.875rem', fontWeight: 500 }}>Attendees</label>
+              {prevTeamMeeting && (
+                <p style={{ margin: 0, fontSize: '0.8125rem', color: '#6b7280' }}>
+                  Pre-filled from your last team meeting — adjust as needed.
+                </p>
+              )}
+              <AttendeesPicker defaultAttendees={teamDefaults} />
+            </div>
 
             <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.25rem' }}>
               <button
@@ -397,6 +424,65 @@ export default async function NewMeetingPage({
                 ← Change type
               </a>
             </div>
+          </form>
+        </div>
+      )}
+
+      {/* Project meeting form */}
+      {activeType === 'project_meeting' && (
+        <div style={{ backgroundColor: 'white', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '1.5rem' }}>
+          <h2 style={{ margin: '0 0 0.25rem 0', fontSize: '1.0625rem', fontWeight: 600 }}>Project Meeting Details</h2>
+          <p style={{ margin: '0 0 1.25rem 0', fontSize: '0.8125rem', color: '#6b7280' }}>
+            Select a project — attendees will pre-fill from your last meeting for that project.
+          </p>
+          <form style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            <input type="hidden" name="meeting_type" value="project_meeting" />
+            {projectIdParam && <input type="hidden" name="project_id" value={projectIdParam} />}
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem' }}>
+              <label htmlFor="project_selector" style={{ fontSize: '0.875rem', fontWeight: 500 }}>Project</label>
+              <ProjectSelector projects={orgProjects ?? []} currentProjectId={projectIdParam} />
+            </div>
+
+            {projectIdParam && (
+              <>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem' }}>
+                    <label htmlFor="date" style={{ fontSize: '0.875rem', fontWeight: 500 }}>Date</label>
+                    <input id="date" name="date" type="date" required defaultValue={today}
+                      style={{ padding: '0.5rem', border: '1px solid #d1d5db', borderRadius: '4px', fontSize: '0.875rem' }} />
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem' }}>
+                    <label htmlFor="time" style={{ fontSize: '0.875rem', fontWeight: 500 }}>Time</label>
+                    <input id="time" name="time" type="time" defaultValue="09:00"
+                      style={{ padding: '0.5rem', border: '1px solid #d1d5db', borderRadius: '4px', fontSize: '0.875rem' }} />
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem' }}>
+                  <label htmlFor="purpose" style={{ fontSize: '0.875rem', fontWeight: 500 }}>Purpose / Title</label>
+                  <input id="purpose" name="purpose" type="text" required maxLength={300}
+                    placeholder="e.g. Sprint Review"
+                    style={{ padding: '0.5rem', border: '1px solid #d1d5db', borderRadius: '4px', fontSize: '0.875rem' }} />
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem' }}>
+                  <label style={{ fontSize: '0.875rem', fontWeight: 500 }}>Attendees</label>
+                  <AttendeesPicker defaultAttendees={projectDefaults} />
+                </div>
+
+                <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.25rem' }}>
+                  <button formAction={createMeeting}
+                    style={{ padding: '0.625rem 1.25rem', backgroundColor: '#111827', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.875rem' }}>
+                    Create Meeting
+                  </button>
+                  <a href="/meetings/new"
+                    style={{ padding: '0.625rem 1rem', border: '1px solid #d1d5db', borderRadius: '4px', fontSize: '0.875rem', color: '#374151', textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}>
+                    ← Change type
+                  </a>
+                </div>
+              </>
+            )}
           </form>
         </div>
       )}
