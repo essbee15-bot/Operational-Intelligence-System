@@ -336,10 +336,10 @@ export default async function MeetingDetailPage({
         <p style={{ margin: 0, color: '#6b7280', fontSize: '0.875rem' }}>
           {displayDate} at {displayTime} · {participantsLine}
         </p>
-        {(meeting.external_attendees as string | null) && (
-          <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.8125rem', color: '#6b7280' }}>
+        {(meeting.external_attendees as string | null)?.trim() && (
+          <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.875rem', color: '#6b7280' }}>
             <span style={{ fontWeight: 500 }}>External: </span>
-            {meeting.external_attendees as string}
+            {(meeting.external_attendees as string).trim()}
           </p>
         )}
       </div>
