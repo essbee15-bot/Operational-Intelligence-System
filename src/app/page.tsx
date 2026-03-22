@@ -388,7 +388,7 @@ export default async function HomePage({
 
   let platformOrgs: OrgMetric[] = []
   let platformTotals = { orgs: 0, users: 0, meetings: 0, activeProjects: 0 }
-  let quietOrgs: string[] = []
+  let quietOrgs: { id: string; name: string }[] = []
   let newOrgsLast30 = 0
 
   if (isPlatformAdmin) {
@@ -412,6 +412,7 @@ export default async function HomePage({
     const { data: usersRaw } = await adminClient
       .from('users')
       .select('organization_id')
+      .limit(10000)
     const userCountByOrg: Record<string, number> = {}
     ;(usersRaw ?? []).forEach(u => {
       const oid = u.organization_id as string | null
@@ -423,6 +424,7 @@ export default async function HomePage({
       .from('meetings')
       .select('organization_id, date')
       .gte('date', thirtyDaysAgo)
+      .limit(10000)
     const meetingCountByOrg: Record<string, number> = {}
     const lastMeetingByOrg: Record<string, string> = {}
     ;(meetingsRaw ?? []).forEach(m => {
@@ -435,10 +437,26 @@ export default async function HomePage({
     })
     platformTotals.meetings = Object.values(meetingCountByOrg).reduce((s, c) => s + c, 0)
 
+    // All-time last meeting date per org (for the Last Meeting column)
+    const { data: allTimeMeetingsRaw } = await adminClient
+      .from('meetings')
+      .select('organization_id, date')
+      .order('date', { ascending: false })
+      .limit(10000)
+    const allTimeLastMeetingByOrg: Record<string, string> = {}
+    ;(allTimeMeetingsRaw ?? []).forEach(m => {
+      const oid = m.organization_id as string | null
+      const d = m.date as string | null
+      if (oid && d && !allTimeLastMeetingByOrg[oid]) {
+        allTimeLastMeetingByOrg[oid] = d
+      }
+    })
+
     const { data: projectsRaw } = await adminClient
       .from('projects')
       .select('organization_id, status')
       .eq('status', 'active')
+      .limit(10000)
     const projectCountByOrg: Record<string, number> = {}
     ;(projectsRaw ?? []).forEach(p => {
       const oid = p.organization_id as string | null
@@ -451,13 +469,13 @@ export default async function HomePage({
       userCount: userCountByOrg[o.id] ?? 0,
       meetingsLast30: meetingCountByOrg[o.id] ?? 0,
       activeProjects: projectCountByOrg[o.id] ?? 0,
-      lastActivityDate: lastMeetingByOrg[o.id] ?? null,
+      lastActivityDate: allTimeLastMeetingByOrg[o.id] ?? null,
     }))
 
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
     quietOrgs = platformOrgs
       .filter(o => o.meetingsLast30 === 0 && o.created_at < sevenDaysAgo)
-      .map(o => o.name)
+      .map(o => ({ id: o.id, name: o.name }))
   }
 
   const now = new Date()
@@ -609,7 +627,7 @@ export default async function HomePage({
         {activeTab === 'platform' && isPlatformAdmin && (
           <div>
             {/* Summary cards */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1rem', marginBottom: '2rem' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '1rem', marginBottom: '2rem' }}>
               {[
                 { label: 'Organisations', value: platformTotals.orgs },
                 { label: 'Total Users', value: platformTotals.users },
@@ -631,7 +649,7 @@ export default async function HomePage({
                     <p style={{ margin: 0, fontWeight: 600, color: '#991b1b', fontSize: '0.875rem' }}>⚠ Going quiet ({quietOrgs.length})</p>
                     <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.8125rem', color: '#7f1d1d' }}>No meetings in 30+ days</p>
                     <ul style={{ margin: '0.5rem 0 0 0', paddingLeft: '1.25rem', fontSize: '0.8125rem', color: '#991b1b' }}>
-                      {quietOrgs.map(name => <li key={name}>{name}</li>)}
+                      {quietOrgs.map(org => <li key={org.id}>{org.name}</li>)}
                     </ul>
                   </div>
                 )}
