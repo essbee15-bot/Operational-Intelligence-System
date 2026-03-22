@@ -1,6 +1,7 @@
 import { createClient } from '@/utils/supabase/server'
 import { createAdminClient } from '@/utils/supabase/admin'
 import { redirect } from 'next/navigation'
+import PageShell from '@/components/PageShell'
 import {
   saveMeetingNotes, saveScores,
   addAction, removeAction, reviewAction,
@@ -8,6 +9,20 @@ import {
   addMilestone, updateMilestoneStatus, removeMilestone,
   saveReviewOverview, saveCustomFieldValue,
 } from './actions'
+
+/** Builds an SVG path string for a sparkline (values: oldest→newest). */
+function buildSparklinePath(values: number[]): string {
+  if (values.length < 2) return ''
+  const min = Math.min(...values)
+  const max = Math.max(...values)
+  const range = max - min || 1
+  const W = 60, H = 16
+  return values.map((v, i) => {
+    const x = ((i / (values.length - 1)) * W).toFixed(1)
+    const y = (H - ((v - min) / range) * H).toFixed(1)
+    return `${i === 0 ? 'M' : 'L'}${x},${y}`
+  }).join(' ')
+}
 
 const TYPE_LABELS: Record<string, string> = {
   one_on_one:         '1:1 Meeting',
@@ -96,7 +111,7 @@ export default async function MeetingDetailPage({
   // Load meeting
   const { data: meeting } = await adminClient
     .from('meetings')
-    .select('*')
+    .select('id, title, meeting_type, organizer_id, attendee_id, date, purpose, notes, review_period, previous_meeting_id, external_attendees, kpi_notes, overall_rating, performance_reasons, success_failure_surprises, development_requests, goals_next_period, general_notes, project_involvement_notes, tests_experiments_notes, aob_notes')
     .eq('id', id)
     .eq('organization_id', profile.organization_id)
     .single()
@@ -121,14 +136,20 @@ export default async function MeetingDetailPage({
     .select('user_id')
     .eq('meeting_id', id)
 
-  // Load carry-forward actions (open from previous meeting)
-  const carryForwardActions = meeting.previous_meeting_id ? (() => {
-    // Will load below
-    return [] as Record<string, unknown>[]
-  })() : []
-
+  // For 1:1: load ALL open actions for the attendee (not just from previous meeting)
+  // For other types: carry-forward open actions from previous meeting
   let prevActions: Record<string, unknown>[] = []
-  if (meeting.previous_meeting_id) {
+  if (meeting.meeting_type === 'one_on_one' && meeting.attendee_id) {
+    const { data } = await adminClient
+      .from('action_items')
+      .select('*')
+      .eq('organization_id', profile.organization_id)
+      .eq('assignee_id', meeting.attendee_id)
+      .eq('is_closed', false)
+      .or(`meeting_id.is.null,meeting_id.neq.${id}`)
+      .order('due_date', { ascending: true, nullsFirst: false })
+    prevActions = (data ?? []) as Record<string, unknown>[]
+  } else if (meeting.previous_meeting_id) {
     const { data } = await adminClient
       .from('action_items')
       .select('*')
@@ -219,6 +240,45 @@ export default async function MeetingDetailPage({
     }
   }
 
+  // For 1:1: load attendee's KPI snapshot
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let attendeeKpis: any[] = []
+  let attendeeKpiRecords: Record<string, number[]> = {}
+
+  if (meeting.meeting_type === 'one_on_one' && meeting.attendee_id) {
+    const attendeeId = meeting.attendee_id as string
+    const { data: attendeeMemberships } = await adminClient
+      .from('team_members').select('team_id').eq('user_id', attendeeId)
+    const attendeeTeamIds = (attendeeMemberships ?? []).map(m => m.team_id as string)
+
+    const kpiQuery = attendeeTeamIds.length > 0
+      ? adminClient.from('kpis').select('id, name, unit, target_value, category')
+          .eq('organization_id', profile.organization_id).eq('is_active', true)
+          .or(`team_id.is.null,team_id.in.(${attendeeTeamIds.join(',')})`)
+          .order('display_order').limit(8)
+      : adminClient.from('kpis').select('id, name, unit, target_value, category')
+          .eq('organization_id', profile.organization_id).eq('is_active', true)
+          .is('team_id', null).order('display_order').limit(8)
+
+    const { data: kpisRaw } = await kpiQuery
+    attendeeKpis = kpisRaw ?? []
+
+    if (attendeeKpis.length > 0) {
+      const { data: kpiRecs } = await adminClient
+        .from('kpi_records').select('kpi_id, value, date')
+        .eq('organization_id', profile.organization_id)
+        .in('kpi_id', attendeeKpis.map((k: { id: string }) => k.id))
+        .order('date', { ascending: false })
+        .limit(attendeeKpis.length * 6)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ;(kpiRecs ?? []).forEach((r: any) => {
+        const kid = r.kpi_id as string
+        if (!attendeeKpiRecords[kid]) attendeeKpiRecords[kid] = []
+        if (attendeeKpiRecords[kid]!.length < 6) attendeeKpiRecords[kid]!.push(r.value as number)
+      })
+    }
+  }
+
   const isSuccess = message === 'Notes saved' || message === 'Scores saved' ||
     message?.endsWith('added') || message?.endsWith('updated') || message?.endsWith('removed') ||
     message === 'Meeting created' || message === 'Action reviewed'
@@ -236,6 +296,12 @@ export default async function MeetingDetailPage({
     const names = (attendees ?? []).map(a => userMap[a.user_id]).filter(Boolean)
     participantsLine = [userMap[meeting.organizer_id], ...names].join(', ')
   }
+  const externalNames = (meeting.external_attendees as string | null)?.trim()
+  if (externalNames) {
+    participantsLine = participantsLine
+      ? `${participantsLine}, ${externalNames} (external)`
+      : `${externalNames} (external)`
+  }
 
   const sectionStyle = { backgroundColor: 'white', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '1.5rem', marginBottom: '1.25rem' }
   const h2Style = { margin: '0 0 1rem 0', fontSize: '1rem', fontWeight: 600 as const }
@@ -247,7 +313,8 @@ export default async function MeetingDetailPage({
   const selectStyle = { padding: '0.5rem', border: '1px solid #d1d5db', borderRadius: '4px', fontSize: '0.875rem', backgroundColor: 'white', width: '100%' }
 
   return (
-    <div style={{ maxWidth: '820px', margin: '2rem auto', padding: '0 1rem', fontFamily: 'system-ui, sans-serif' }}>
+    <PageShell>
+    <div className="page-content" style={{ maxWidth: '820px', fontFamily: 'system-ui, sans-serif' }}>
       {/* Header */}
       <div style={{ marginBottom: '0.5rem' }}>
         <a href="/meetings" style={{ fontSize: '0.875rem', color: '#6b7280', textDecoration: 'none' }}>← My Meetings</a>
@@ -269,6 +336,12 @@ export default async function MeetingDetailPage({
         <p style={{ margin: 0, color: '#6b7280', fontSize: '0.875rem' }}>
           {displayDate} at {displayTime} · {participantsLine}
         </p>
+        {(meeting.external_attendees as string | null) && (
+          <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.8125rem', color: '#6b7280' }}>
+            <span style={{ fontWeight: 500 }}>External: </span>
+            {meeting.external_attendees as string}
+          </p>
+        )}
       </div>
 
       {message && (
@@ -282,25 +355,105 @@ export default async function MeetingDetailPage({
         </div>
       )}
 
-      {/* ── 1:1 only: KPI Notes ──────────────────────────────────────── */}
+      {/* ── 1:1 only: Score (first, most important) ──────────────────── */}
       {meeting.meeting_type === 'one_on_one' && (
         <div style={sectionStyle}>
-          <h2 style={h2Style}>KPI / KRA Context</h2>
-          <p style={{ margin: '0 0 0.75rem 0', color: '#6b7280', fontSize: '0.8125rem' }}>
-            Note any KPI or KRA context ahead of the review. Full KPI tracking is coming in a future release.
+          <h2 style={h2Style}>Score Last Month</h2>
+          <p style={{ margin: '0 0 0.875rem 0', color: '#6b7280', fontSize: '0.8125rem' }}>
+            1–3 = needs support &nbsp;·&nbsp; 4–6 = owning role &nbsp;·&nbsp; 7–9 = exceeding expectations
           </p>
-          <form style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+          <form style={{ display: 'flex', flexDirection: 'column', gap: '0.875rem' }}>
             <input type="hidden" name="meeting_id" value={id} />
-            <textarea
-              name="kpi_notes"
-              defaultValue={meeting.kpi_notes ?? ''}
-              maxLength={2000}
-              rows={3}
-              placeholder="e.g. Sales target 85%, projects on track…"
-              style={textareaStyle}
-            />
-            <button formAction={saveMeetingNotes} style={{ ...btnPrimary, alignSelf: 'flex-start' }}>Save</button>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem' }}>
+              {[
+                { name: 'self_score', label: 'Self Score', value: scores?.self_score },
+                { name: 'manager_score', label: 'Manager Score', value: scores?.manager_score },
+                { name: 'adjusted_score', label: 'Adjusted (agreed)', value: scores?.adjusted_score },
+              ].map(s => (
+                <div key={s.name} style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem' }}>
+                  <label style={labelStyle}>{s.label}</label>
+                  <select name={s.name} defaultValue={s.value?.toString() ?? ''} style={selectStyle}>
+                    <option value="">—</option>
+                    {[1,2,3,4,5,6,7,8,9].map(n => <option key={n} value={n}>{n}</option>)}
+                  </select>
+                </div>
+              ))}
+            </div>
+            <button formAction={saveScores} style={{ ...btnPrimary, alignSelf: 'flex-start' }}>Save Scores</button>
           </form>
+        </div>
+      )}
+
+      {/* ── 1:1 only: KPI Snapshot ───────────────────────────────────── */}
+      {meeting.meeting_type === 'one_on_one' && (
+        <div style={sectionStyle}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.875rem' }}>
+            <h2 style={{ ...h2Style, margin: 0 }}>KPI Snapshot</h2>
+            <a href="/kpis" style={{ fontSize: '0.8125rem', color: '#2563eb', textDecoration: 'none' }}>View all →</a>
+          </div>
+          {attendeeKpis.length === 0 ? (
+            <p style={{ margin: 0, fontSize: '0.875rem', color: '#9ca3af' }}>No KPIs configured for this organisation yet.</p>
+          ) : (
+            <>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: '0.625rem', marginBottom: '1rem' }}>
+                {attendeeKpis.map((kpi: { id: string; name: string; unit: string | null; target_value: number | null }) => {
+                  const records = attendeeKpiRecords[kpi.id] ?? []
+                  const current = records[0] ?? null
+                  const target  = kpi.target_value
+                  const onTarget = target != null && current != null && current >= target
+                  const sparkValues = [...records].reverse()
+                  const sparkPath = buildSparklinePath(sparkValues)
+                  // Colour: on-target status takes priority over trend direction
+                  const trendColor = (() => {
+                    if (target != null && current != null) return onTarget ? '#16a34a' : '#dc2626'
+                    if (records.length < 2 || records[0] == null || records[1] == null) return '#9ca3af'
+                    return records[0] > records[1] ? '#16a34a' : records[0] < records[1] ? '#dc2626' : '#9ca3af'
+                  })()
+                  return (
+                    <a key={kpi.id} href={`/kpis/${kpi.id}`} style={{
+                      display: 'block', textDecoration: 'none',
+                      background: '#f9fafb', borderRadius: '6px', padding: '0.75rem',
+                      border: '1px solid #e5e7eb',
+                      borderLeftWidth: '3px',
+                      borderLeftColor: current == null ? '#d1d5db' : onTarget ? '#16a34a' : '#dc2626',
+                    }}>
+                      <div style={{ fontSize: '0.65rem', color: '#9ca3af', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '0.3rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {kpi.name}
+                      </div>
+                      <div style={{ fontSize: '1.25rem', fontWeight: 700, color: '#111827', lineHeight: 1, marginBottom: '0.15rem' }}>
+                        {current != null ? current.toLocaleString() : '—'}
+                        {kpi.unit && current != null && <span style={{ fontSize: '0.7rem', color: '#9ca3af', marginLeft: '0.2rem', fontWeight: 400 }}>{kpi.unit}</span>}
+                      </div>
+                      {sparkPath ? (
+                        <svg width="100%" height="18" viewBox="0 0 60 16" preserveAspectRatio="none" style={{ display: 'block', margin: '0.2rem 0' }}>
+                          <path d={sparkPath} fill="none" stroke={trendColor} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      ) : <div style={{ height: '18px', margin: '0.2rem 0' }} />}
+                      {target != null && current != null && (
+                        <div style={{ fontSize: '0.6rem', fontWeight: 600, color: onTarget ? '#16a34a' : '#dc2626' }}>
+                          {onTarget ? '✓ on target' : '✗ below target'}
+                        </div>
+                      )}
+                    </a>
+                  )
+                })}
+              </div>
+              {/* KPI discussion notes */}
+              <form style={{ display: 'flex', flexDirection: 'column', gap: '0.625rem' }}>
+                <input type="hidden" name="meeting_id" value={id} />
+                <label style={{ ...labelStyle, marginBottom: '0.125rem' }}>KPI discussion notes</label>
+                <textarea
+                  name="kpi_notes"
+                  defaultValue={meeting.kpi_notes ?? ''}
+                  maxLength={2000}
+                  rows={2}
+                  placeholder="e.g. Sales target at 85%, pipeline strong — focus on conversion rate next month…"
+                  style={textareaStyle}
+                />
+                <button formAction={saveMeetingNotes} style={{ ...btnPrimary, alignSelf: 'flex-start' }}>Save Notes</button>
+              </form>
+            </>
+          )}
         </div>
       )}
 
@@ -337,11 +490,15 @@ export default async function MeetingDetailPage({
         </div>
       )}
 
-      {/* ── Actions from last month (carry-forward) ───────────────────── */}
-      {meeting.previous_meeting_id && (
+      {/* ── Open actions for attendee (1:1) / Carry-forward (other types) ── */}
+      {((meeting.meeting_type === 'one_on_one' && meeting.attendee_id) ||
+        (meeting.meeting_type !== 'one_on_one' && meeting.previous_meeting_id)) && (
         <div style={sectionStyle}>
           <h2 style={h2Style}>
-            Actions from Last Meeting
+            {meeting.meeting_type === 'one_on_one'
+              ? `Open Actions — ${meeting.attendee_id ? userMap[meeting.attendee_id as string] ?? 'Attendee' : 'Attendee'}`
+              : 'Actions from Last Meeting'
+            }
             {completedReviews.length > 0 && (
               <span style={{ marginLeft: '0.5rem', fontSize: '0.75rem', color: '#6b7280', fontWeight: 400 }}>
                 ({completedReviews.length} reviewed, {pendingReviews.length} pending)
@@ -350,7 +507,12 @@ export default async function MeetingDetailPage({
           </h2>
 
           {prevActions.length === 0 && (
-            <p style={{ color: '#6b7280', fontSize: '0.875rem', margin: 0 }}>No open actions carried forward from the previous meeting.</p>
+            <p style={{ color: '#6b7280', fontSize: '0.875rem', margin: 0 }}>
+              {meeting.meeting_type === 'one_on_one'
+                ? `No open actions found for ${meeting.attendee_id ? userMap[meeting.attendee_id as string] ?? 'this person' : 'this person'}.`
+                : 'No open actions carried forward from the previous meeting.'
+              }
+            </p>
           )}
 
           {/* Already reviewed */}
@@ -399,35 +561,6 @@ export default async function MeetingDetailPage({
               </form>
             </div>
           ))}
-        </div>
-      )}
-
-      {/* ── 1:1 only: Scoring ─────────────────────────────────────────── */}
-      {meeting.meeting_type === 'one_on_one' && (
-        <div style={sectionStyle}>
-          <h2 style={h2Style}>Score Last Month</h2>
-          <p style={{ margin: '0 0 0.875rem 0', color: '#6b7280', fontSize: '0.8125rem' }}>
-            1–3 = needs support &nbsp;·&nbsp; 4–6 = owning role &nbsp;·&nbsp; 7–9 = exceeding expectations
-          </p>
-          <form style={{ display: 'flex', flexDirection: 'column', gap: '0.875rem' }}>
-            <input type="hidden" name="meeting_id" value={id} />
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem' }}>
-              {[
-                { name: 'self_score', label: 'Self Score', value: scores?.self_score },
-                { name: 'manager_score', label: 'Manager Score', value: scores?.manager_score },
-                { name: 'adjusted_score', label: 'Adjusted (agreed)', value: scores?.adjusted_score },
-              ].map(s => (
-                <div key={s.name} style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem' }}>
-                  <label style={labelStyle}>{s.label}</label>
-                  <select name={s.name} defaultValue={s.value?.toString() ?? ''} style={selectStyle}>
-                    <option value="">—</option>
-                    {[1,2,3,4,5,6,7,8,9].map(n => <option key={n} value={n}>{n}</option>)}
-                  </select>
-                </div>
-              ))}
-            </div>
-            <button formAction={saveScores} style={{ ...btnPrimary, alignSelf: 'flex-start' }}>Save Scores</button>
-          </form>
         </div>
       )}
 
@@ -817,5 +950,6 @@ export default async function MeetingDetailPage({
         </div>
       )}
     </div>
+    </PageShell>
   )
 }
