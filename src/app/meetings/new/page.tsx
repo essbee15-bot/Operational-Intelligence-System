@@ -48,7 +48,7 @@ export default async function NewMeetingPage({
   // Load org users (for attendee selection)
   const { data: orgUsers } = await supabase
     .from('users')
-    .select('id, full_name, email, role')
+    .select('id, full_name, email')
     .eq('organization_id', profile.organization_id)
     .eq('is_anonymised', false)
     .neq('id', user.id)
@@ -143,14 +143,16 @@ export default async function NewMeetingPage({
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem' }}>
               <label htmlFor="attendee_id" style={{ fontSize: '0.875rem', fontWeight: 500 }}>Employee</label>
+              {showingAllForOneOnOne && (
+                <p style={{ margin: '0 0 0.25rem 0', fontSize: '0.8125rem', color: '#9ca3af' }}>
+                  No direct reports found — showing all staff.
+                </p>
+              )}
               <select
                 id="attendee_id" name="attendee_id" required
                 style={{ padding: '0.5rem', border: '1px solid #d1d5db', borderRadius: '4px', fontSize: '0.875rem', backgroundColor: 'white' }}
               >
                 <option value="">Select employee…</option>
-                {showingAllForOneOnOne && (
-                  <option value="" disabled>No direct reports found — showing all staff</option>
-                )}
                 {oneOnOnePool.map(u => (
                   <option key={u.id} value={u.id}>{u.full_name ?? u.email}</option>
                 ))}
@@ -205,14 +207,16 @@ export default async function NewMeetingPage({
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem' }}>
               <label htmlFor="attendee_id" style={{ fontSize: '0.875rem', fontWeight: 500 }}>Employee being reviewed</label>
+              {showingAllForOneOnOne && (
+                <p style={{ margin: '0 0 0.25rem 0', fontSize: '0.8125rem', color: '#9ca3af' }}>
+                  No direct reports found — showing all staff.
+                </p>
+              )}
               <select
                 id="attendee_id" name="attendee_id" required
                 style={{ padding: '0.5rem', border: '1px solid #d1d5db', borderRadius: '4px', fontSize: '0.875rem', backgroundColor: 'white' }}
               >
                 <option value="">Select employee…</option>
-                {showingAllForOneOnOne && (
-                  <option value="" disabled>No direct reports found — showing all staff</option>
-                )}
                 {oneOnOnePool.map(u => (
                   <option key={u.id} value={u.id}>{u.full_name ?? u.email}</option>
                 ))}
