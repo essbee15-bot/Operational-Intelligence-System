@@ -39,36 +39,38 @@ export async function createMeeting(formData: FormData) {
 
   if (meetingType === 'one_on_one') {
     const attendeeId = formData.get('attendee_id') as string
-    if (!attendeeId) {
-      redirect('/meetings/new?type=one_on_one&message=Please select an employee')
-    }
-    if (!UUID_RE.test(attendeeId)) {
-      redirect('/meetings/new?type=one_on_one&message=Invalid employee selection')
-    }
+    const safeAttendeeId = attendeeId && UUID_RE.test(attendeeId) ? attendeeId : null
+
+    const rawExternal = (formData.get('external_attendees') as string ?? '').trim()
+    const externalAttendees = rawExternal.slice(0, 500) || null
 
     // Auto-detect most recent previous 1:1 between the same two people
     // (regardless of who organised it)
-    const { data: prevMeeting } = await adminClient
-      .from('meetings')
-      .select('id')
-      .eq('organization_id', orgId)
-      .eq('meeting_type', 'one_on_one')
-      .or(`and(organizer_id.eq.${user.id},attendee_id.eq.${attendeeId}),and(organizer_id.eq.${attendeeId},attendee_id.eq.${user.id})`)
-      .order('date', { ascending: false })
-      .limit(1)
-      .maybeSingle()
-
-    const previousMeetingId = prevMeeting?.id ?? null
+    let previousMeetingId: string | null = null
+    if (safeAttendeeId) {
+      const { data: prevMeeting } = await adminClient
+        .from('meetings')
+        .select('id')
+        .eq('organization_id', orgId)
+        .eq('meeting_type', 'one_on_one')
+        .or(`and(organizer_id.eq.${user.id},attendee_id.eq.${safeAttendeeId}),and(organizer_id.eq.${safeAttendeeId},attendee_id.eq.${user.id})`)
+        .order('date', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      previousMeetingId = prevMeeting?.id ?? null
+    }
 
     // Auto-generate title
-    const { data: attendee } = await adminClient
-      .from('users')
-      .select('full_name, email')
-      .eq('id', attendeeId)
-      .single()
-
-    const attendeeName = attendee?.full_name ?? attendee?.email ?? 'Employee'
-    const title = `1:1 — ${attendeeName} — ${new Date(dateStr).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}`
+    let attendeeName: string | null = null
+    if (safeAttendeeId) {
+      const { data: attendee } = await adminClient
+        .from('users').select('full_name, email').eq('id', safeAttendeeId).single()
+      attendeeName = attendee?.full_name ?? attendee?.email ?? null
+    } else if (externalAttendees) {
+      attendeeName = externalAttendees.split(',')[0]?.trim() ?? null
+    }
+    const datePart = new Date(dateStr).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+    const title = attendeeName ? `1:1 — ${attendeeName} — ${datePart}` : `1:1 — ${datePart}`
 
     const { data: meeting, error } = await adminClient
       .from('meetings')
@@ -77,9 +79,10 @@ export async function createMeeting(formData: FormData) {
         meeting_type: 'one_on_one',
         title,
         organizer_id: user.id,
-        attendee_id: attendeeId,
+        attendee_id: safeAttendeeId,
         date: dateTime.toISOString(),
         previous_meeting_id: previousMeetingId,
+        external_attendees: externalAttendees,
       })
       .select('id')
       .single()
@@ -92,38 +95,41 @@ export async function createMeeting(formData: FormData) {
 
   } else if (meetingType === 'performance_review') {
     const attendeeId = formData.get('attendee_id') as string
-    if (!attendeeId) {
-      redirect('/meetings/new?type=performance_review&message=Please select an employee')
-    }
-    if (!UUID_RE.test(attendeeId)) {
-      redirect('/meetings/new?type=performance_review&message=Invalid employee selection')
-    }
+    const safeAttendeeId = attendeeId && UUID_RE.test(attendeeId) ? attendeeId : null
+
+    const rawExternal = (formData.get('external_attendees') as string ?? '').trim()
+    const externalAttendees = rawExternal.slice(0, 500) || null
 
     const reviewPeriod = (formData.get('review_period') as string)?.trim() || null
 
     // Auto-detect most recent previous review for this employee
-    const { data: prevReview } = await adminClient
-      .from('meetings')
-      .select('id')
-      .eq('organization_id', orgId)
-      .eq('meeting_type', 'performance_review')
-      .eq('attendee_id', attendeeId)
-      .order('date', { ascending: false })
-      .limit(1)
-      .maybeSingle()
-
-    const previousMeetingId = prevReview?.id ?? null
+    let previousMeetingId: string | null = null
+    if (safeAttendeeId) {
+      const { data: prevReview } = await adminClient
+        .from('meetings')
+        .select('id')
+        .eq('organization_id', orgId)
+        .eq('meeting_type', 'performance_review')
+        .eq('attendee_id', safeAttendeeId)
+        .order('date', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      previousMeetingId = prevReview?.id ?? null
+    }
 
     // Auto-generate title
-    const { data: attendee } = await adminClient
-      .from('users')
-      .select('full_name, email')
-      .eq('id', attendeeId)
-      .single()
-
-    const attendeeName = attendee?.full_name ?? attendee?.email ?? 'Employee'
+    let attendeeName: string | null = null
+    if (safeAttendeeId) {
+      const { data: attendee } = await adminClient
+        .from('users').select('full_name, email').eq('id', safeAttendeeId).single()
+      attendeeName = attendee?.full_name ?? attendee?.email ?? null
+    } else if (externalAttendees) {
+      attendeeName = externalAttendees.split(',')[0]?.trim() ?? null
+    }
     const datePart = new Date(dateStr).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
-    const title = `Review — ${attendeeName} — ${reviewPeriod ?? datePart}`
+    const title = attendeeName
+      ? `Review — ${attendeeName} — ${reviewPeriod ?? datePart}`
+      : `Review — ${reviewPeriod ?? datePart}`
 
     const { data: meeting, error } = await adminClient
       .from('meetings')
@@ -132,10 +138,11 @@ export async function createMeeting(formData: FormData) {
         meeting_type: 'performance_review',
         title,
         organizer_id: user.id,
-        attendee_id: attendeeId,
+        attendee_id: safeAttendeeId,
         date: dateTime.toISOString(),
         previous_meeting_id: previousMeetingId,
         review_period: reviewPeriod,
+        external_attendees: externalAttendees,
       })
       .select('id')
       .single()
@@ -165,6 +172,9 @@ export async function createMeeting(formData: FormData) {
 
     const rawAttendeeIds = formData.getAll('attendee_ids[]') as string[]
     const attendeeIds = rawAttendeeIds.filter(id => UUID_RE.test(id))
+
+    const rawExternal = (formData.get('external_attendees') as string ?? '').trim()
+    const externalAttendees = rawExternal.slice(0, 500) || null
 
     // Auto-detect most recent previous meeting of the same type with overlapping attendees
     // (same organiser, same type — best proxy for a recurring meeting series)
@@ -200,6 +210,7 @@ export async function createMeeting(formData: FormData) {
         date: dateTime.toISOString(),
         previous_meeting_id: previousMeetingId,
         project_id: safeProjectId,
+        external_attendees: externalAttendees,
       })
       .select('id')
       .single()
