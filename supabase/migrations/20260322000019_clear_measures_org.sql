@@ -15,8 +15,8 @@ BEGIN
 
   -- Create org only if it doesn't exist
   IF existing_org_id IS NULL THEN
-    INSERT INTO public.organizations (id, name, subscription_status, created_at, updated_at)
-    VALUES (org_id, 'Clear Measures', 'active', now(), now());
+    INSERT INTO public.organizations (id, name, subscription_status, created_at)
+    VALUES (org_id, 'Clear Measures', 'active', now());
   ELSE
     org_id := existing_org_id;
   END IF;
@@ -26,8 +26,7 @@ BEGIN
   UPDATE public.users
   SET
     organization_id = org_id,
-    role = 'admin',
-    updated_at = now()
+    role = 'admin'
   WHERE email = 'hello@clearmeasures.co.uk'
     AND is_platform_admin = true;
 END;
