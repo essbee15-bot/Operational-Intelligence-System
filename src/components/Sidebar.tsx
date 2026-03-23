@@ -154,9 +154,16 @@ export default function Sidebar({
         { label: 'Reporting Lines', href: '/reporting', icon: 'reporting' },
         { label: 'My Scores',       href: '/scores',    icon: 'scores' },
       )
+      if (role === 'manager' || role === 'admin') {
+        mainItems.push(
+          { label: 'Team Rankings',  href: '/scores/team', icon: 'scores' },
+        )
+      }
       if (isAdmin) {
         adminItems.push(
-          { label: 'Administration', href: '/admin', icon: 'admin', exact: true },
+          { label: 'Administration',       href: '/admin',            icon: 'admin', exact: true },
+          { label: 'Org Rankings',         href: '/scores/org',       icon: 'scores' },
+          { label: 'Manager Effectiveness', href: '/scores/managers', icon: 'scores' },
         )
       }
     }
@@ -171,10 +178,17 @@ export default function Sidebar({
       { label: 'Reporting Lines', href: '/reporting', icon: 'reporting' },
       { label: 'My Scores',       href: '/scores',    icon: 'scores' },
     )
+    if (role === 'manager' || role === 'admin') {
+      mainItems.push(
+        { label: 'Team Rankings',  href: '/scores/team', icon: 'scores' },
+      )
+    }
 
     if (isAdmin) {
       adminItems.push(
-        { label: 'Administration',  href: '/admin',   icon: 'admin', exact: true },
+        { label: 'Administration',       href: '/admin',            icon: 'admin', exact: true },
+        { label: 'Org Rankings',         href: '/scores/org',       icon: 'scores' },
+        { label: 'Manager Effectiveness', href: '/scores/managers', icon: 'scores' },
       )
     }
   }
