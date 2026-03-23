@@ -83,6 +83,11 @@ const icons = {
       <path d="M11 3a2.5 2.5 0 010 5M13 14a5 5 0 00-2.5-4.33" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
     </svg>
   ),
+  scores: (
+    <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
+      <path d="M2 13V7M5.5 13V5M9 13V8M12.5 13V3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+    </svg>
+  ),
 }
 
 type NavItem = { label: string; href: string; icon: keyof typeof icons; exact?: boolean }
@@ -147,6 +152,7 @@ export default function Sidebar({
         { label: 'Goals & OKRs',    href: '/goals',     icon: 'goals' },
         { label: 'Projects',        href: '/projects',  icon: 'projects' },
         { label: 'Reporting Lines', href: '/reporting', icon: 'reporting' },
+        { label: 'My Scores',       href: '/scores',    icon: 'scores' },
       )
       if (isAdmin) {
         adminItems.push(
@@ -163,6 +169,7 @@ export default function Sidebar({
       { label: 'Goals & OKRs',    href: '/goals',     icon: 'goals' },
       { label: 'Projects',        href: '/projects',  icon: 'projects' },
       { label: 'Reporting Lines', href: '/reporting', icon: 'reporting' },
+      { label: 'My Scores',       href: '/scores',    icon: 'scores' },
     )
 
     if (isAdmin) {
