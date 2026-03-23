@@ -2,6 +2,7 @@ import { createClient } from '@/utils/supabase/server'
 import { createAdminClient } from '@/utils/supabase/admin'
 import { redirect } from 'next/navigation'
 import { createCycle } from './actions'
+import PageShell from '@/components/PageShell'
 
 export default async function Admin360Page({
   searchParams,
@@ -71,6 +72,7 @@ export default async function Admin360Page({
   const defaultOpensAt = new Date().toISOString().slice(0, 16)
 
   return (
+    <PageShell>
     <div style={{ maxWidth: '900px', margin: '2rem auto', padding: '0 1rem', fontFamily: 'system-ui, sans-serif' }}>
       <div style={{ marginBottom: '0.5rem' }}>
         <a href="/" style={{ fontSize: '0.875rem', color: '#6b7280', textDecoration: 'none' }}>← Dashboard</a>
@@ -213,5 +215,6 @@ export default async function Admin360Page({
         )}
       </div>
     </div>
+    </PageShell>
   )
 }
