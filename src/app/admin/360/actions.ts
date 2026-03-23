@@ -52,7 +52,7 @@ export async function createCycle(formData: FormData) {
     .single()
 
   if (error || !cycle) {
-    redirect('/admin/360?message=Failed to create cycle')
+    redirect(`/admin/360?message=Failed to create cycle: ${error?.message ?? 'unknown error'}`)
   }
   redirect(`/admin/360/${cycle.id}?message=Cycle created`)
 }
@@ -130,6 +130,7 @@ export async function addCustomQuestion(formData: FormData) {
     .from('review_cycles')
     .update({ custom_questions: updated })
     .eq('id', cycleId)
+    .eq('organization_id', profile.organization_id)
 
   if (error) redirect(`/admin/360/${cycleId}?message=Failed to add question: ${error.message}`)
   redirect(`/admin/360/${cycleId}?message=Question added`)
@@ -159,6 +160,7 @@ export async function removeCustomQuestion(formData: FormData) {
     .from('review_cycles')
     .update({ custom_questions: updated })
     .eq('id', cycleId)
+    .eq('organization_id', profile.organization_id)
 
   if (error) redirect(`/admin/360/${cycleId}?message=Failed to remove question: ${error.message}`)
   redirect(`/admin/360/${cycleId}?message=Question removed`)
