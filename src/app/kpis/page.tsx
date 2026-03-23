@@ -21,9 +21,9 @@ const FREQUENCIES: Record<string, string> = {
 export default async function KpisPage({
   searchParams,
 }: {
-  searchParams: Promise<{ message?: string }>
+  searchParams: Promise<{ message?: string; back?: string }>
 }) {
-  const { message } = await searchParams
+  const { message, back } = await searchParams
 
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -99,9 +99,17 @@ export default async function KpisPage({
 
   const totalKpis = kpiWithRecords.length
 
+  // Validate back URL to prevent open redirect (must start with /)
+  const safeBack = back && back.startsWith('/') ? back : null
+
   return (
     <PageShell>
     <div className="page-content">
+      {safeBack && (
+        <div style={{ marginBottom: '0.75rem' }}>
+          <a href={safeBack} style={{ fontSize: '0.875rem', color: '#6b7280', textDecoration: 'none' }}>← Back to Meeting</a>
+        </div>
+      )}
       <div className="page-header">
         <div>
           <h1 className="page-title">KPIs</h1>
@@ -215,11 +223,11 @@ export default async function KpisPage({
 
                           {/* Actions */}
                           <td style={{ padding: '0.625rem 0.875rem', textAlign: 'right', whiteSpace: 'nowrap' }}>
-                            <a href={`/kpis/${kpi.id as string}`} style={{ fontSize: '0.75rem', color: '#374151', textDecoration: 'none', marginRight: isManager ? '0.75rem' : '0' }}>
+                            <a href={`/kpis/${kpi.id as string}${safeBack ? `?back=${encodeURIComponent(safeBack)}` : ''}`} style={{ fontSize: '0.75rem', color: '#374151', textDecoration: 'none', marginRight: isManager ? '0.75rem' : '0' }}>
                               View
                             </a>
                             {isManager && (
-                              <a href={`/kpis/${kpi.id as string}?record=1`} style={{ fontSize: '0.75rem', color: '#2563eb', textDecoration: 'none' }}>
+                              <a href={`/kpis/${kpi.id as string}?record=1${safeBack ? `&back=${encodeURIComponent(safeBack)}` : ''}`} style={{ fontSize: '0.75rem', color: '#2563eb', textDecoration: 'none' }}>
                                 Record
                               </a>
                             )}

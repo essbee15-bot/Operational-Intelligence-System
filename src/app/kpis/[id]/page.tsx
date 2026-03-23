@@ -24,10 +24,10 @@ export default async function KpiDetailPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>
-  searchParams: Promise<{ message?: string; record?: string }>
+  searchParams: Promise<{ message?: string; record?: string; back?: string }>
 }) {
   const { id: kpiId } = await params
-  const { message } = await searchParams
+  const { message, back } = await searchParams
 
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -113,12 +113,19 @@ export default async function KpiDetailPage({
   const today = new Date().toISOString().split('T')[0]
   const isSuccess = message === 'Reading recorded' || message === 'Reading removed'
 
+  // Validate back URL to prevent open redirect (must start with /)
+  const safeBack = back && back.startsWith('/') ? back : null
+
   return (
     <PageShell>
     <div className="page-content" style={{ maxWidth: '900px', fontFamily: 'system-ui, sans-serif' }}>
       {/* Back link */}
       <div style={{ marginBottom: '0.5rem' }}>
-        <a href="/kpis" style={{ fontSize: '0.875rem', color: '#6b7280', textDecoration: 'none' }}>← KPIs</a>
+        {safeBack ? (
+          <a href={safeBack} style={{ fontSize: '0.875rem', color: '#6b7280', textDecoration: 'none' }}>← Back to Meeting</a>
+        ) : (
+          <a href="/kpis" style={{ fontSize: '0.875rem', color: '#6b7280', textDecoration: 'none' }}>← KPIs</a>
+        )}
       </div>
 
       {/* Message banner */}

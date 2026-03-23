@@ -390,7 +390,7 @@ export default async function MeetingDetailPage({
         <div style={sectionStyle}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.875rem' }}>
             <h2 style={{ ...h2Style, margin: 0 }}>KPI Snapshot</h2>
-            <a href="/kpis" style={{ fontSize: '0.8125rem', color: '#2563eb', textDecoration: 'none' }}>View all →</a>
+            <a href={`/kpis?back=/meetings/${id}`} style={{ fontSize: '0.8125rem', color: '#2563eb', textDecoration: 'none' }}>View all →</a>
           </div>
           {attendeeKpis.length === 0 ? (
             <p style={{ margin: 0, fontSize: '0.875rem', color: '#9ca3af' }}>No KPIs configured for this organisation yet.</p>
