@@ -63,25 +63,47 @@ export async function saveScores(formData: FormData) {
   const meetingId = formData.get('meeting_id') as string
   const { adminClient } = await verifyMeetingAccess(meetingId)
 
-  const selfScore = parseInt(formData.get('self_score') as string)
-  const managerScore = parseInt(formData.get('manager_score') as string)
-  const adjustedScore = parseInt(formData.get('adjusted_score') as string)
+  // Collect all dimension scores from form data
+  // Field names follow pattern: {dimension_key}__{score_type}
+  const dimensions = new Map<string, { self_score: number | null; manager_score: number | null; adjusted_score: number | null }>()
 
-  const scoreObj = {
+  for (const [key, value] of formData.entries()) {
+    if (!key.includes('__')) continue
+    const [dimKey, scoreType] = key.split('__')
+    if (!dimKey || !scoreType) continue
+
+    if (!dimensions.has(dimKey)) {
+      dimensions.set(dimKey, { self_score: null, manager_score: null, adjusted_score: null })
+    }
+    const entry = dimensions.get(dimKey)!
+    const parsed = parseInt(value as string)
+    const score = isNaN(parsed) ? null : parsed
+
+    if (scoreType === 'self_score') entry.self_score = score
+    else if (scoreType === 'manager_score') entry.manager_score = score
+    else if (scoreType === 'adjusted_score') entry.adjusted_score = score
+  }
+
+  // Upsert each dimension score
+  const rows = [...dimensions.entries()].map(([dimKey, scores]) => ({
     meeting_id: meetingId,
-    self_score: isNaN(selfScore) ? null : selfScore,
-    manager_score: isNaN(managerScore) ? null : managerScore,
-    adjusted_score: isNaN(adjustedScore) ? null : adjustedScore,
+    dimension_key: dimKey,
+    self_score: scores.self_score,
+    manager_score: scores.manager_score,
+    adjusted_score: scores.adjusted_score,
     updated_at: new Date().toISOString(),
+  }))
+
+  if (rows.length > 0) {
+    const { error } = await adminClient
+      .from('meeting_dimension_scores')
+      .upsert(rows, { onConflict: 'meeting_id,dimension_key' })
+
+    if (error) {
+      redirect(`/meetings/${meetingId}?message=Failed to save scores: ${error.message}`)
+    }
   }
 
-  const { error } = await adminClient
-    .from('one_on_one_scores')
-    .upsert(scoreObj, { onConflict: 'meeting_id' })
-
-  if (error) {
-    redirect(`/meetings/${meetingId}?message=Failed to save scores: ${error.message}`)
-  }
   redirect(`/meetings/${meetingId}?message=Scores saved`)
 }
 
