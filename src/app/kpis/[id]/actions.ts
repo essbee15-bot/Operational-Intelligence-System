@@ -16,7 +16,7 @@ async function verifyKpiAccess(kpiId: string, requireManager = false) {
     .single()
 
   if (!profile) redirect('/login')
-  if (profile.is_platform_admin) redirect('/platform-admin/kpis')
+  if (profile.is_platform_admin && !profile.organization_id) redirect('/platform-admin/kpis')
 
   if (requireManager && profile.role === 'contributor') {
     redirect(`/kpis/${kpiId}?message=Only managers and admins can record KPI values`)

@@ -36,7 +36,7 @@ export default async function KpisPage({
     .single()
 
   if (!profile) redirect('/login')
-  if (profile.is_platform_admin) redirect('/platform-admin/kpis')
+  if (profile.is_platform_admin && !profile.organization_id) redirect('/platform-admin/kpis')
 
   const isManager = profile.role === 'admin' || profile.role === 'manager'
   const adminClient = createAdminClient()
