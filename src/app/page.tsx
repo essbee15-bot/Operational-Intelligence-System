@@ -981,7 +981,7 @@ export default async function HomePage({
                   <a href={isAdmin ? '/admin/360' : '/360'} className="link">{isAdmin ? 'Manage →' : 'View all →'}</a>
                 </div>
                 <div className="card-body">
-                  {!isAdmin && profile.manager_id && (
+                  {!isAdmin && profile?.manager_id && (
                     pending360Count > 0 ? (
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem' }}>
                         <span style={{ fontSize: '0.875rem', color: 'var(--amber)', fontWeight: 500 }}>
@@ -995,7 +995,7 @@ export default async function HomePage({
                       <span style={{ fontSize: '0.875rem', color: 'var(--green)', fontWeight: 500 }}>✓ All reviews submitted</span>
                     )
                   )}
-                  {!isAdmin && !profile.manager_id && (
+                  {!isAdmin && !profile?.manager_id && (
                     <span style={{ fontSize: '0.875rem', color: 'var(--text-muted)' }}>No manager assigned yet.</span>
                   )}
                   {isAdmin && (
