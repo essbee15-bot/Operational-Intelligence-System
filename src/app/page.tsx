@@ -30,7 +30,7 @@ export default async function HomePage({
 
   const { data: profile } = await supabase
     .from('users')
-    .select('id, full_name, role, is_platform_admin, organization_id')
+    .select('id, full_name, role, is_platform_admin, organization_id, manager_id')
     .eq('id', user.id)
     .single()
 
@@ -64,6 +64,9 @@ export default async function HomePage({
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let pulseAdminStats: { bestTeam: string | null; worstTeam: string | null; responseCount: number; periodLabel: string } | null = null
   let hasPulseSurveys = false
+  let pending360Count = 0
+  let has360Cycles = false
+  let admin360Stats: { bestManager: string | null; worstManager: string | null; responseCount: number; cycleName: string } | null = null
 
   if (profile?.organization_id) {
     const adminClient = createAdminClient()
@@ -194,6 +197,81 @@ export default async function HomePage({
             worstTeam: eligible.length >= 2 ? (teamMap[eligible[eligible.length - 1]![0]] ?? null) : null,
             responseCount: (closedResponses ?? []).length,
             periodLabel: recentPeriod.period_label as string,
+          }
+        }
+      }
+    }
+
+    // 8. 360 Feedback
+    const { data: open360Cycles } = await adminClient
+      .from('review_cycles').select('id')
+      .eq('organization_id', profile.organization_id)
+      .eq('is_closed', false)
+
+    has360Cycles = (open360Cycles ?? []).length > 0
+
+    if (has360Cycles && profile.manager_id) {
+      for (const cycle of open360Cycles ?? []) {
+        const { data: comp } = await adminClient
+          .from('review_completions')
+          .select('cycle_id')
+          .eq('cycle_id', cycle.id as string)
+          .eq('user_id', profile.id)
+          .eq('manager_id', profile.manager_id as string)
+          .maybeSingle()
+        if (!comp) pending360Count++
+      }
+    }
+
+    if (isAdmin) {
+      const { data: latestClosed } = await adminClient
+        .from('review_cycles')
+        .select('id, name')
+        .eq('organization_id', profile.organization_id)
+        .eq('is_closed', true)
+        .order('closes_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+
+      if (latestClosed) {
+        const { data: responses } = await adminClient
+          .from('review_responses')
+          .select('manager_id, answers')
+          .eq('cycle_id', latestClosed.id as string)
+          .eq('organization_id', profile.organization_id)
+
+        if (responses && responses.length > 0) {
+          const byManager = new Map<string, number[]>()
+          for (const r of responses) {
+            const mid = r.manager_id as string
+            if (!byManager.has(mid)) byManager.set(mid, [])
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const nums = ((r.answers as any[]) ?? [])
+              .filter((a: { value: unknown }) => typeof a.value === 'number')
+              .map((a: { value: number }) => a.value)
+            byManager.get(mid)!.push(...nums)
+          }
+
+          let best: { id: string; avg: number } | null = null
+          let worst: { id: string; avg: number } | null = null
+          for (const [mid, scores] of byManager) {
+            if (scores.length < 3) continue
+            const avg = scores.reduce((a, b) => a + b, 0) / scores.length
+            if (!best || avg > best.avg) best = { id: mid, avg }
+            if (!worst || avg < worst.avg) worst = { id: mid, avg }
+          }
+
+          const ids = [best?.id, worst?.id].filter((x): x is string => x != null)
+          const { data: managers } = ids.length > 0
+            ? await adminClient.from('users').select('id, full_name').in('id', ids)
+            : { data: [] }
+          const nameMap = new Map((managers ?? []).map(m => [m.id as string, m.full_name as string]))
+
+          admin360Stats = {
+            bestManager:  best ? (nameMap.get(best.id) ?? null) : null,
+            worstManager: worst && worst.id !== best?.id ? (nameMap.get(worst.id) ?? null) : null,
+            responseCount: responses.length,
+            cycleName: latestClosed.name as string,
           }
         }
       }
@@ -483,6 +561,8 @@ export default async function HomePage({
 
   const hour = now.getHours()
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening'
+
+  const widgetCount = [activeProjectCount > 0, hasPulseSurveys, has360Cycles].filter(Boolean).length
 
   return (
     <PageShell>
@@ -829,9 +909,9 @@ export default async function HomePage({
           </div>
         </div>
 
-        {/* ── Row 2: Projects + Pulse (conditionally shown) ── */}
-        {(activeProjectCount > 0 || hasPulseSurveys) && (
-          <div style={{ display: 'grid', gridTemplateColumns: activeProjectCount > 0 && hasPulseSurveys ? '1fr 1fr' : '1fr', gap: '1rem', marginBottom: '1rem' }}>
+        {/* ── Row 2: Projects + Pulse + 360 (conditionally shown) ── */}
+        {(activeProjectCount > 0 || hasPulseSurveys || has360Cycles) && (
+          <div style={{ display: 'grid', gridTemplateColumns: widgetCount === 3 ? '1fr 1fr 1fr' : widgetCount === 2 ? '1fr 1fr' : '1fr', gap: '1rem', marginBottom: '1rem' }}>
 
             {activeProjectCount > 0 && (
               <div className="card">
@@ -888,6 +968,45 @@ export default async function HomePage({
                       </div>
                     ) : (
                       <p style={{ margin: 0, fontSize: '0.875rem', color: 'var(--text-subtle)' }}>No closed periods yet.</p>
+                    )
+                  )}
+                </div>
+              </div>
+            )}
+
+            {has360Cycles && (
+              <div className="card">
+                <div className="card-header">
+                  <h3 className="card-title">360 Feedback</h3>
+                  <a href={isAdmin ? '/admin/360' : '/360'} className="link">{isAdmin ? 'Manage →' : 'View all →'}</a>
+                </div>
+                <div className="card-body">
+                  {!isAdmin && profile.manager_id && (
+                    pending360Count > 0 ? (
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem' }}>
+                        <span style={{ fontSize: '0.875rem', color: 'var(--amber)', fontWeight: 500 }}>
+                          📋 {pending360Count} review{pending360Count !== 1 ? 's' : ''} awaiting submission
+                        </span>
+                        <a href="/360" style={{ fontSize: '0.8rem', padding: '0.375rem 0.75rem', backgroundColor: 'var(--text)', color: 'white', borderRadius: 'var(--radius-sm)', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                          Review →
+                        </a>
+                      </div>
+                    ) : (
+                      <span style={{ fontSize: '0.875rem', color: 'var(--green)', fontWeight: 500 }}>✓ All reviews submitted</span>
+                    )
+                  )}
+                  {!isAdmin && !profile.manager_id && (
+                    <span style={{ fontSize: '0.875rem', color: 'var(--text-muted)' }}>No manager assigned yet.</span>
+                  )}
+                  {isAdmin && (
+                    admin360Stats ? (
+                      <div style={{ display: 'flex', gap: '0.625rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                        <span style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>Last: <strong style={{ color: 'var(--text)' }}>{admin360Stats.cycleName}</strong> · {admin360Stats.responseCount} responses</span>
+                        {admin360Stats.bestManager && <span className="badge badge-green">🏆 {admin360Stats.bestManager}</span>}
+                        {admin360Stats.worstManager && <span className="badge badge-red">⚠ {admin360Stats.worstManager}</span>}
+                      </div>
+                    ) : (
+                      <p style={{ margin: 0, fontSize: '0.875rem', color: 'var(--text-subtle)' }}>No closed cycles yet.</p>
                     )
                   )}
                 </div>
