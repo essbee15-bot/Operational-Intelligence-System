@@ -111,12 +111,15 @@ export default async function MeetingDetailPage({
   // Load meeting using the user's session client so RLS applies correctly.
   // adminClient (service role) can fail when FORCE ROW LEVEL SECURITY is set
   // because it has no session user and user_organization_id() returns NULL.
-  const { data: meeting } = await supabase
+  const { data: meeting, error: meetingError } = await supabase
     .from('meetings')
     .select('id, title, meeting_type, organizer_id, attendee_id, date, purpose, review_period, previous_meeting_id, external_attendees, organization_id, kpi_notes, overall_rating, performance_reasons, success_failure_surprises, development_requests, goals_next_period, general_notes, project_involvement_notes, tests_experiments_notes, aob_notes')
     .eq('id', id)
     .single()
 
+  if (meetingError) {
+    console.error('Failed to load meeting:', meetingError)
+  }
   if (!meeting) redirect('/meetings?message=Meeting not found')
 
   // Load org users for dropdowns
@@ -195,12 +198,29 @@ export default async function MeetingDetailPage({
     .eq('meeting_id', id)
     .order('display_order')
 
-  // Load 1:1 scores
-  const { data: scores } = await adminClient
-    .from('one_on_one_scores')
-    .select('*')
+  // Load human score dimensions (system defaults + org custom)
+  const { data: humanDimensions } = await adminClient
+    .from('score_dimensions')
+    .select('key, name, description')
+    .eq('source', 'human')
+    .eq('is_active', true)
+    .or(`organization_id.is.null,organization_id.eq.${profile.organization_id}`)
+    .order('display_order')
+
+  // Load existing dimension scores for this meeting
+  const { data: dimensionScores } = await adminClient
+    .from('meeting_dimension_scores')
+    .select('dimension_key, self_score, manager_score, adjusted_score')
     .eq('meeting_id', id)
-    .single()
+
+  const scoreMap: Record<string, { self_score: number | null; manager_score: number | null; adjusted_score: number | null }> = {}
+  for (const s of dimensionScores ?? []) {
+    scoreMap[s.dimension_key as string] = {
+      self_score: s.self_score as number | null,
+      manager_score: s.manager_score as number | null,
+      adjusted_score: s.adjusted_score as number | null,
+    }
+  }
 
   // Load custom field definitions for meetings (org-specific)
   const { data: fieldDefs } = await adminClient
@@ -356,30 +376,47 @@ export default async function MeetingDetailPage({
         </div>
       )}
 
-      {/* ── 1:1 only: Score (first, most important) ──────────────────── */}
-      {meeting.meeting_type === 'one_on_one' && (
+      {/* ── 1:1 only: Per-dimension scoring ──────────────────────────── */}
+      {meeting.meeting_type === 'one_on_one' && (humanDimensions ?? []).length > 0 && (
         <div style={sectionStyle}>
-          <h2 style={h2Style}>Score Last Month</h2>
+          <h2 style={h2Style}>Performance Scores</h2>
           <p style={{ margin: '0 0 0.875rem 0', color: '#6b7280', fontSize: '0.8125rem' }}>
             1–3 = needs support &nbsp;·&nbsp; 4–6 = owning role &nbsp;·&nbsp; 7–9 = exceeding expectations
           </p>
-          <form style={{ display: 'flex', flexDirection: 'column', gap: '0.875rem' }}>
+          <form style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
             <input type="hidden" name="meeting_id" value={id} />
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem' }}>
-              {[
-                { name: 'self_score', label: 'Self Score', value: scores?.self_score },
-                { name: 'manager_score', label: 'Manager Score', value: scores?.manager_score },
-                { name: 'adjusted_score', label: 'Adjusted (agreed)', value: scores?.adjusted_score },
-              ].map(s => (
-                <div key={s.name} style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem' }}>
-                  <label style={labelStyle}>{s.label}</label>
-                  <select name={s.name} defaultValue={s.value?.toString() ?? ''} style={selectStyle}>
-                    <option value="">—</option>
-                    {[1,2,3,4,5,6,7,8,9].map(n => <option key={n} value={n}>{n}</option>)}
-                  </select>
+            {(humanDimensions ?? []).map((dim: { key: string; name: string; description: string | null }) => {
+              const existing = scoreMap[dim.key]
+              return (
+                <div key={dim.key} style={{ borderBottom: '1px solid #f3f4f6', paddingBottom: '1rem' }}>
+                  <div style={{ marginBottom: '0.5rem' }}>
+                    <span style={{ fontWeight: 600, fontSize: '0.9375rem', color: '#111827' }}>{dim.name}</span>
+                    {dim.description && (
+                      <span style={{ fontSize: '0.75rem', color: '#9ca3af', marginLeft: '0.5rem' }}>{dim.description}</span>
+                    )}
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem' }}>
+                    {[
+                      { suffix: 'self_score', label: 'Self', value: existing?.self_score },
+                      { suffix: 'manager_score', label: 'Manager', value: existing?.manager_score },
+                      { suffix: 'adjusted_score', label: 'Agreed', value: existing?.adjusted_score },
+                    ].map(s => (
+                      <div key={s.suffix} style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem' }}>
+                        <label style={labelStyle}>{s.label}</label>
+                        <select
+                          name={`${dim.key}__${s.suffix}`}
+                          defaultValue={s.value?.toString() ?? ''}
+                          style={selectStyle}
+                        >
+                          <option value="">—</option>
+                          {[1,2,3,4,5,6,7,8,9].map(n => <option key={n} value={n}>{n}</option>)}
+                        </select>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              ))}
-            </div>
+              )
+            })}
             <button formAction={saveScores} style={{ ...btnPrimary, alignSelf: 'flex-start' }}>Save Scores</button>
           </form>
         </div>

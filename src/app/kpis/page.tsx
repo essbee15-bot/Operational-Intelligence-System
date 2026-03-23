@@ -100,7 +100,7 @@ export default async function KpisPage({
   const totalKpis = kpiWithRecords.length
 
   // Validate back URL to prevent open redirect (must start with /)
-  const safeBack = back && back.startsWith('/') ? back : null
+  const safeBack = back && back.startsWith('/') && !back.startsWith('//') ? back : null
 
   return (
     <PageShell>

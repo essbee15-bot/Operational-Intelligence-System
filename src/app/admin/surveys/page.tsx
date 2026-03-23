@@ -2,6 +2,7 @@ import { createClient } from '@/utils/supabase/server'
 import { createAdminClient } from '@/utils/supabase/admin'
 import { redirect } from 'next/navigation'
 import { createSurvey } from './actions'
+import PageShell from '@/components/PageShell'
 
 const FREQUENCY_LABELS: Record<string, string> = {
   weekly:    'Weekly',
@@ -74,6 +75,7 @@ export default async function AdminSurveysPage({
   const isSuccess = message?.toLowerCase().includes('created') || message?.toLowerCase().includes('updated')
 
   return (
+    <PageShell>
     <div style={{ maxWidth: '900px', margin: '2rem auto', padding: '0 1rem', fontFamily: 'system-ui, sans-serif' }}>
       <div style={{ marginBottom: '0.5rem' }}>
         <a href="/" style={{ fontSize: '0.875rem', color: '#6b7280', textDecoration: 'none' }}>← Dashboard</a>
@@ -225,5 +227,6 @@ export default async function AdminSurveysPage({
         )}
       </div>
     </div>
+    </PageShell>
   )
 }
