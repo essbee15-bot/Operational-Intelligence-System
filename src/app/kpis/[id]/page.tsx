@@ -114,7 +114,7 @@ export default async function KpiDetailPage({
   const isSuccess = message === 'Reading recorded' || message === 'Reading removed'
 
   // Validate back URL to prevent open redirect (must start with /)
-  const safeBack = back && back.startsWith('/') ? back : null
+  const safeBack = back && back.startsWith('/') && !back.startsWith('//') ? back : null
 
   return (
     <PageShell>
